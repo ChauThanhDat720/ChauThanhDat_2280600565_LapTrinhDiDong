@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Local-first AWS SAM blueprint for Smart Hospital. Do not deploy without review.
+
+Parameters:
+  CognitoUserPoolArn:
+    Type: String
+    Description: ARN of the approved Cognito User Pool (supplied only at deployment time).
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    CodeUri: src/
+    Timeout: 10
+    MemorySize: 256
+    Tracing: Active
+    Environment:
+      Variables:
+        LOG_LEVEL: INFO
+
+Resources:
+  SmartHospitalApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: v1
+      EndpointConfiguration: REGIONAL
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !Ref CognitoUserPoolArn
+
+  PatientsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: cognitoUserId
+          AttributeType: S
+        - AttributeName: patientId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: cognitoUserId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: patientId-index
+          KeySchema:
+            - AttributeName: patientId
+              KeyType: HASH
+          Projection: { ProjectionType: KEYS_ONLY }
+
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers/health.handler
+      Events:
+        Health:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SmartHospitalApi
+            Path: /health
+            Method: get
+            Auth:
+              Authorizer: NONE
+
+  DepartmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers/departments.list
+      Events:
+        Departments:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /departments, Method: get, Auth: { Authorizer: NONE } }
+
+  DoctorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers/doctors.handler
+      Events:
+        Doctors:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /doctors, Method: get, Auth: { Authorizer: NONE } }
+        DoctorById:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /doctors/{id}, Method: get, Auth: { Authorizer: NONE } }
+
+  AppointmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers/appointments.handler
+      Events:
+        ListAppointments:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /appointments, Method: get }
+        CreateAppointment:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /appointments, Method: post }
+        GetAppointment:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /appointments/{id}, Method: get }
+        CancelAppointment:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /appointments/{id}/cancel, Method: patch }
+
+  PatientFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers/patients.handler
+      Policies:
+        - Statement:
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+            Resource: !GetAtt PatientsTable.Arn
+      Events:
+        GetMe:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /patients/me, Method: get }
+        UpdateMe:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /patients/me, Method: patch }

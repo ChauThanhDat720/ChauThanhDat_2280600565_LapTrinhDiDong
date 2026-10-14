@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../../core/session/patient_session.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../home/presentation/home_screen.dart';
+import '../repositories/auth_repository_provider.dart';
+import 'role_home.dart';
 import 'login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -24,15 +24,14 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _start() async {
-    await PatientSession.instance.restore();
+    final user = await authRepository.restoreSession();
     if (!mounted) return;
     _navigationTimer = Timer(const Duration(milliseconds: 1500), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (_) => PatientSession.instance.isLoggedIn
-                ? const PatientHomeScreen()
-                : const LoginScreen(),
+            builder: (_) =>
+                user == null ? const LoginScreen() : homeForRole(user.role),
           ),
         );
       }

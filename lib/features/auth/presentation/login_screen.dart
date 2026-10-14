@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../../core/session/patient_session.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../home/presentation/home_screen.dart';
+import '../repositories/auth_repository_provider.dart';
+import 'forgot_password_screen.dart';
+import 'role_home.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -30,14 +31,31 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
-    await PatientSession.instance.signIn(name: _name.text, email: _email.text);
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const PatientHomeScreen()),
-      (_) => false,
-    );
+    try {
+      final user = await authRepository.signIn(
+        _email.text.trim(),
+        _password.text,
+        demoName: _name.text.trim(),
+      );
+      if (user == null) throw StateError('No signed-in user');
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => homeForRole(user.role)),
+        (_) => false,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Không thể đăng nhập. Kiểm tra email, mật khẩu hoặc kết nối mạng.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -66,18 +84,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: AppColors.mutedText),
                   ),
                   const SizedBox(height: 32),
-                  TextFormField(
-                    controller: _name,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(
-                      labelText: 'Tên hiển thị',
-                      prefixIcon: Icon(Icons.person_outline),
+                  if (authRepository.isDemo)
+                    TextFormField(
+                      controller: _name,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'Tên hiển thị',
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().length < 2
+                          ? 'Nhập tên của bạn'
+                          : null,
                     ),
-                    validator: (value) =>
-                        value == null || value.trim().length < 2
-                        ? 'Nhập tên của bạn'
-                        : null,
-                  ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _email,
@@ -111,15 +130,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: () => ScaffoldMessenger.of(context)
-                          .showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Password recovery will be added in Phase 2.',
-                              ),
-                            ),
-                          ),
-                      child: const Text('Forgot password?'),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ForgotPasswordScreen(),
+                        ),
+                      ),
+                      child: const Text('Quên mật khẩu?'),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -167,16 +183,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: const Text('Create patient account'),
                   ),
                   const SizedBox(height: 24),
-                  const Center(
-                    child: Text(
-                      'Doctor and Admin portals will be available in later phases.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: AppColors.mutedText,
-                        fontSize: 12,
+                  if (authRepository.isDemo)
+                    const Center(
+                      child: Text(
+                        'Chế độ demo: chỉ có vai trò Bệnh nhân và không phải phiên Cognito.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppColors.mutedText,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),

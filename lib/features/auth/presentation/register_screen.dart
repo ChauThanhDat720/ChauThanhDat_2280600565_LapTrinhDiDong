@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../../core/session/patient_session.dart';
-import '../../home/presentation/home_screen.dart';
+import '../repositories/auth_repository_provider.dart';
+import 'confirm_email_screen.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -43,25 +43,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
     setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 700));
-    if (!mounted) {
-      return;
+    try {
+      final outcome = await authRepository.signUp(
+        name: _name.text.trim(),
+        email: _email.text.trim(),
+        password: _password.text,
+        phone: _phone.text.trim(),
+      );
+      if (!mounted) return;
+      if (outcome.needsConfirmation) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => ConfirmEmailScreen(email: _email.text.trim()),
+          ),
+        );
+      } else {
+        Navigator.of(context).pop();
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Không thể đăng ký. Kiểm tra thông tin hoặc kết nối mạng.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-    await PatientSession.instance.update(
-      name: _name.text,
-      email: _email.text,
-      phone: _phone.text,
-      dateOfBirth: _dateOfBirth.text,
-      gender: _gender,
-      address: _address.text,
-    );
-    if (!mounted) {
-      return;
-    }
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const PatientHomeScreen()),
-      (_) => false,
-    );
   }
 
   @override

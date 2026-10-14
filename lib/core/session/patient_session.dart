@@ -13,6 +13,8 @@ class PatientSession extends ChangeNotifier {
   static const _dobKey = 'patient_dob';
   static const _genderKey = 'patient_gender';
   static const _addressKey = 'patient_address';
+  static const _emergencyNameKey = 'patient_emergency_name';
+  static const _emergencyPhoneKey = 'patient_emergency_phone';
 
   String _name = '';
   String _email = '';
@@ -20,6 +22,8 @@ class PatientSession extends ChangeNotifier {
   String _dateOfBirth = '';
   String _gender = '';
   String _address = '';
+  String _emergencyContactName = '';
+  String _emergencyContactPhone = '';
 
   String get name => _name.isEmpty ? 'Patient' : _name;
   String get email => _email;
@@ -27,6 +31,8 @@ class PatientSession extends ChangeNotifier {
   String get dateOfBirth => _dateOfBirth;
   String get gender => _gender;
   String get address => _address;
+  String get emergencyContactName => _emergencyContactName;
+  String get emergencyContactPhone => _emergencyContactPhone;
   bool get isLoggedIn => _email.isNotEmpty;
 
   Future<void> restore() async {
@@ -37,6 +43,8 @@ class PatientSession extends ChangeNotifier {
     _dateOfBirth = preferences.getString(_dobKey) ?? '';
     _gender = preferences.getString(_genderKey) ?? '';
     _address = preferences.getString(_addressKey) ?? '';
+    _emergencyContactName = preferences.getString(_emergencyNameKey) ?? '';
+    _emergencyContactPhone = preferences.getString(_emergencyPhoneKey) ?? '';
     notifyListeners();
   }
 
@@ -47,6 +55,8 @@ class PatientSession extends ChangeNotifier {
     required String dateOfBirth,
     required String gender,
     required String address,
+    String emergencyContactName = '',
+    String emergencyContactPhone = '',
   }) async {
     _name = name.trim();
     _email = email.trim();
@@ -54,6 +64,8 @@ class PatientSession extends ChangeNotifier {
     _dateOfBirth = dateOfBirth.trim();
     _gender = gender.trim();
     _address = address.trim();
+    _emergencyContactName = emergencyContactName.trim();
+    _emergencyContactPhone = emergencyContactPhone.trim();
     final preferences = await SharedPreferences.getInstance();
     await Future.wait([
       preferences.setString(_nameKey, _name),
@@ -62,6 +74,8 @@ class PatientSession extends ChangeNotifier {
       preferences.setString(_dobKey, _dateOfBirth),
       preferences.setString(_genderKey, _gender),
       preferences.setString(_addressKey, _address),
+      preferences.setString(_emergencyNameKey, _emergencyContactName),
+      preferences.setString(_emergencyPhoneKey, _emergencyContactPhone),
     ]);
     notifyListeners();
   }
@@ -84,6 +98,8 @@ class PatientSession extends ChangeNotifier {
     _dateOfBirth = '';
     _gender = '';
     _address = '';
+    _emergencyContactName = '';
+    _emergencyContactPhone = '';
     final preferences = await SharedPreferences.getInstance();
     await Future.wait([
       preferences.remove(_nameKey),
@@ -92,6 +108,8 @@ class PatientSession extends ChangeNotifier {
       preferences.remove(_dobKey),
       preferences.remove(_genderKey),
       preferences.remove(_addressKey),
+      preferences.remove(_emergencyNameKey),
+      preferences.remove(_emergencyPhoneKey),
     ]);
     notifyListeners();
   }

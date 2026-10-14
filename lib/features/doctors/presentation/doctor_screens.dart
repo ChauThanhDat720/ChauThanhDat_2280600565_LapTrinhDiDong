@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/app_timezone.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../appointments/domain/appointment.dart';
-import '../../appointments/presentation/appointment_list_screen.dart';
+import '../../appointments/data/appointment_repository.dart';
+import '../../appointments/presentation/appointment_success_screen.dart';
 import '../../departments/domain/department.dart' as hospital;
 import '../domain/doctor.dart';
 
@@ -222,8 +224,15 @@ class DoctorDetailScreen extends StatelessWidget {
 }
 
 class BookAppointmentScreen extends StatefulWidget {
-  const BookAppointmentScreen({super.key, required this.doctor});
+  const BookAppointmentScreen({
+    super.key,
+    required this.doctor,
+    this.repository = const LocalAppointmentRepository(),
+    this.nowProvider,
+  });
   final Doctor doctor;
+  final AppointmentRepository repository;
+  final DateTime Function()? nowProvider;
   @override
   State<BookAppointmentScreen> createState() => _BookAppointmentScreenState();
 }
@@ -233,6 +242,9 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   DateTime? _selectedDay;
   String? _time;
   bool _submitting = false;
+  bool _loadingSlots = false;
+  Object? _slotError;
+  List<AppointmentSlot> _slots = const [];
   @override
   void dispose() {
     _reason.dispose();
@@ -240,7 +252,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   }
 
   Future<void> _selectDate() async {
-    final now = DateTime.now();
+    final now = widget.nowProvider?.call() ?? AppTimezone.now();
     final selected = await showDatePicker(
       context: context,
       initialDate: _selectedDay ?? now,
@@ -251,7 +263,28 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
       confirmText: 'Chọn',
     );
     if (selected != null && mounted) {
-      setState(() => _selectedDay = selected);
+      setState(() {
+        _selectedDay = selected;
+        _time = null;
+        _slots = const [];
+        _slotError = null;
+      });
+      await _loadSlots(selected);
+    }
+  }
+
+  Future<void> _loadSlots(DateTime date) async {
+    setState(() => _loadingSlots = true);
+    try {
+      final slots = await widget.repository.getAvailableSlots(
+        widget.doctor.id,
+        date,
+      );
+      if (mounted) setState(() => _slots = slots);
+    } catch (error) {
+      if (mounted) setState(() => _slotError = error);
+    } finally {
+      if (mounted) setState(() => _loadingSlots = false);
     }
   }
 
@@ -270,6 +303,10 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
     }
     if (_reason.text.trim().isEmpty) {
       _showMessage('Vui lòng nhập lý do khám');
+      return;
+    }
+    if (_reason.text.trim().length > 500) {
+      _showMessage('Lý do khám không hợp lệ');
       return;
     }
 
@@ -310,26 +347,42 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
     if (confirmed != true || !mounted) return;
 
     setState(() => _submitting = true);
-    AppointmentStore.instance.addAppointment(
-      Appointment(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
-        doctorId: widget.doctor.id,
-        doctorName: widget.doctor.name,
-        specialty: widget.doctor.specialty,
-        department: widget.doctor.department,
-        date: _selectedDay!,
-        time: _time!,
-        reason: _reason.text.trim(),
-      ),
-    );
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Đặt lịch khám thành công')));
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const AppointmentListScreen()),
-      (route) => route.isFirst,
-    );
+    try {
+      final appointment = await widget.repository.createAppointment(
+        Appointment(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          doctorId: widget.doctor.id,
+          doctorName: widget.doctor.name,
+          specialty: widget.doctor.specialty,
+          department: widget.doctor.department,
+          date: _selectedDay!,
+          time: _time!,
+          reason: _reason.text.trim(),
+        ),
+      );
+      if (!mounted) return;
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => AppointmentSuccessScreen(
+            appointment: appointment,
+            repository: widget.repository,
+          ),
+        ),
+      );
+      return;
+    } catch (error) {
+      if (mounted) {
+        final message = error.toString().replaceFirst('Bad state: ', '');
+        _showMessage(
+          message.contains('Khung giờ')
+              ? 'Khung giờ này không còn khả dụng. Vui lòng chọn giờ khác.'
+              : message,
+        );
+        if (message.contains('Khung giờ')) await _loadSlots(_selectedDay!);
+      }
+      if (mounted) setState(() => _submitting = false);
+      return;
+    }
   }
 
   void _showMessage(String message) {
@@ -369,33 +422,44 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
               const SizedBox(height: 26),
               const SectionTitle(title: 'Chọn khung giờ'),
               const SizedBox(height: 12),
-              Wrap(
-                spacing: 9,
-                runSpacing: 9,
-                children:
-                    [
-                          '08:00',
-                          '08:30',
-                          '09:00',
-                          '09:30',
-                          '10:00',
-                          '10:30',
-                          '13:30',
-                          '14:00',
-                          '14:30',
-                          '15:00',
-                          '15:30',
-                          '16:00',
-                        ]
-                        .map(
-                          (time) => ChoiceChip(
-                            label: Text(time),
-                            selected: _time == time,
-                            onSelected: (_) => setState(() => _time = time),
+              if (_selectedDay == null)
+                const Text('Hãy chọn ngày để xem khung giờ.')
+              else if (_loadingSlots)
+                const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 12),
+                      Text('Đang tải giờ khám...'),
+                    ],
+                  ),
+                )
+              else if (_slotError != null)
+                TextButton(
+                  onPressed: () => _loadSlots(_selectedDay!),
+                  child: const Text('Không thể tải khung giờ. Thử lại'),
+                )
+              else if (_slots.isEmpty)
+                const Text('Không còn khung giờ trống trong ngày này.')
+              else
+                Wrap(
+                  spacing: 9,
+                  runSpacing: 9,
+                  children: _slots
+                      .map(
+                        (slot) => ChoiceChip(
+                          label: Text(
+                            '${slot.label} - ${slot.endTime.hour.toString().padLeft(2, '0')}:${slot.endTime.minute.toString().padLeft(2, '0')}',
                           ),
-                        )
-                        .toList(),
-              ),
+                          selected: _time == slot.label,
+                          onSelected: slot.isAvailable
+                              ? (_) => setState(() => _time = slot.label)
+                              : null,
+                        ),
+                      )
+                      .toList(),
+                ),
               const SizedBox(height: 26),
               TextFormField(
                 controller: _reason,
