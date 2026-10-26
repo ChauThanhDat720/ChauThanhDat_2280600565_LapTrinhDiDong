@@ -79,6 +79,7 @@ class Appointment {
     this.followUpDate,
     this.isFollowUp = false,
     this.parentAppointmentId,
+    this.hasIntake = false,
   });
 
   final String id,
@@ -98,6 +99,7 @@ class Appointment {
   final int? rating, queueNumber;
   final bool isFollowUp;
   final String? parentAppointmentId;
+  final bool hasIntake;
 
   String get appointmentId => id;
   DateTime get startTime => DateTime(
@@ -141,6 +143,7 @@ class Appointment {
     DateTime? followUpDate,
     bool? isFollowUp,
     String? parentAppointmentId,
+    bool? hasIntake,
   }) => Appointment(
     id: id,
     doctorId: doctorId,
@@ -170,6 +173,7 @@ class Appointment {
     followUpDate: followUpDate ?? this.followUpDate,
     isFollowUp: isFollowUp ?? this.isFollowUp,
     parentAppointmentId: parentAppointmentId ?? this.parentAppointmentId,
+    hasIntake: hasIntake ?? this.hasIntake,
   );
 
   factory Appointment.fromJson(Map<String, dynamic> j) {
@@ -206,6 +210,7 @@ class Appointment {
       followUpDate: DateTime.tryParse(j['followUpDate'] as String? ?? j['follow_up_date'] as String? ?? ''),
       isFollowUp: (j['isFollowUp'] ?? j['is_follow_up']) as bool? ?? false,
       parentAppointmentId: (j['parentAppointmentId'] ?? j['parent_appointment_id']) as String?,
+      hasIntake: (j['hasIntake'] ?? j['has_intake']) as bool? ?? false,
     );
   }
 
@@ -230,6 +235,7 @@ class Appointment {
     'follow_up_date': followUpDate?.toIso8601String(),
     'is_follow_up': isFollowUp,
     'parent_appointment_id': parentAppointmentId,
+    'has_intake': hasIntake,
   };
 }
 

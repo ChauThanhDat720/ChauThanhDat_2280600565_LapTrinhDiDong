@@ -28,6 +28,8 @@ import '../../payments/presentation/invoice_management_screen.dart';
 import '../../family/presentation/family_selector_bar.dart';
 import '../../family/presentation/family_members_screen.dart';
 import '../../teleconsultation/presentation/post_care_chat_screen.dart';
+import '../../clinical_intake/data/clinical_intake_repository.dart';
+import '../../clinical_intake/presentation/pre_visit_intake_screen.dart';
 
 class PatientHomeScreen extends StatefulWidget {
   const PatientHomeScreen({
@@ -920,6 +922,80 @@ class _HomeTabState extends State<_HomeTab> {
                     ],
                   ),
                 ),
+              ),
+              const SizedBox(height: 6),
+              ListenableBuilder(
+                listenable: ClinicalIntakeStore.instance,
+                builder: (context, _) {
+                  final intake = ClinicalIntakeStore.instance.getByAppointmentId(appointment.id);
+                  final hasIntake = intake != null;
+                  return InkWell(
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => PreVisitIntakeScreen(
+                            appointment: appointment,
+                            repository: widget.repository is RemoteAppointmentRepository
+                                ? const RemoteClinicalIntakeRepository()
+                                : const LocalClinicalIntakeRepository(),
+                          ),
+                        ),
+                      );
+                      _loadUpcomingAppointment();
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: hasIntake
+                            ? const Color(0xFFF0FDF4)
+                            : const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: hasIntake
+                              ? const Color(0xFF86EFAC)
+                              : const Color(0xFFFCD34D),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            hasIntake
+                                ? Icons.assignment_turned_in_rounded
+                                : Icons.edit_note_rounded,
+                            size: 16,
+                            color: hasIntake
+                                ? const Color(0xFF16A34A)
+                                : const Color(0xFFD97706),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              hasIntake
+                                  ? 'Triệu chứng tiền khám: Đã nộp (VAS ${intake.painLevel}/10)'
+                                  : 'Điền phiếu triệu chứng trước khám (Mất 2 phút)',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                                color: hasIntake
+                                    ? const Color(0xFF166534)
+                                    : const Color(0xFF92400E),
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 12,
+                            color: hasIntake
+                                ? const Color(0xFF16A34A)
+                                : const Color(0xFFD97706),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ],

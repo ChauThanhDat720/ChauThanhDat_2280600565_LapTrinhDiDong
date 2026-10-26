@@ -16,6 +16,9 @@ import '../../payments/presentation/e_invoice_screen.dart';
 import '../../reminders/data/medication_reminder_repository.dart';
 import '../../reminders/presentation/medication_reminder_screen.dart';
 import '../../teleconsultation/presentation/post_care_chat_screen.dart';
+import '../../clinical_intake/data/clinical_intake_repository.dart';
+import '../../clinical_intake/presentation/pre_visit_intake_screen.dart';
+import '../../clinical_intake/presentation/widgets/intake_summary_card.dart';
 
 class AppointmentListScreen extends StatefulWidget {
   const AppointmentListScreen({
@@ -241,6 +244,115 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
           ),
         if (_appointment.cancellationReason?.isNotEmpty == true)
           _line('Lý do hủy', _appointment.cancellationReason!),
+        // Pre-visit Clinical Intake Section
+        if (_appointment.status != AppointmentStatus.cancelled) ...[
+          const SizedBox(height: 16),
+          ListenableBuilder(
+            listenable: ClinicalIntakeStore.instance,
+            builder: (context, _) {
+              final intake = ClinicalIntakeStore.instance.getByAppointmentId(_appointment.id);
+              if (intake != null) {
+                return IntakeSummaryCard(
+                  intake: intake,
+                  onTapEdit: _appointment.status != AppointmentStatus.completed
+                      ? () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => PreVisitIntakeScreen(
+                                appointment: _appointment,
+                                repository: widget.repository is RemoteAppointmentRepository
+                                    ? const RemoteClinicalIntakeRepository()
+                                    : const LocalClinicalIntakeRepository(),
+                              ),
+                            ),
+                          );
+                          setState(() {});
+                        }
+                      : null,
+                );
+              }
+
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDFA),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.35)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.assignment_outlined, color: AppColors.primary),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Khai báo triệu chứng trước khám',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFCCFBF1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Text(
+                            '⏱ 2 phút',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Điền trước thông tin vị trí đau, mức độ khó chịu (thang điểm 1-10) và thuốc đang dùng để Bác sĩ chuẩn bị chu đáo hơn.',
+                      style: TextStyle(color: Color(0xFF134E4A), fontSize: 13, height: 1.35),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                        ),
+                        icon: const Icon(Icons.edit_note_rounded, size: 20),
+                        label: const Text('Điền phiếu triệu chứng tiền khám'),
+                        onPressed: () async {
+                          final res = await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => PreVisitIntakeScreen(
+                                appointment: _appointment,
+                                repository: widget.repository is RemoteAppointmentRepository
+                                    ? const RemoteClinicalIntakeRepository()
+                                    : const LocalClinicalIntakeRepository(),
+                              ),
+                            ),
+                          );
+                          if (res != null && mounted) {
+                            setState(() {
+                              _appointment = _appointment.copyWith(hasIntake: true);
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
                 if (_appointment.status == AppointmentStatus.completed &&
             ((_appointment.diagnosis != null && _appointment.diagnosis!.isNotEmpty) ||
                 (_appointment.prescription != null &&

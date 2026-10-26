@@ -713,5 +713,76 @@ test('Appointment API: Reception QR Check-in and Queue Number Assignment', async
   assert.equal(JSON.parse(completeRes.body).status, 'completed');
 });
 
+test('Appointment API: Pre-visit Clinical Intake Survey', async () => {
+  await resetAppointments();
+
+  // 1. Patient creates appointment
+  const createRes = await handler(
+    eventFor({
+      patientId: 'patient-intake-test',
+      method: 'POST',
+      body: sampleAppointment(),
+    }),
+  );
+  assert.equal(createRes.statusCode, 201);
+  const apt = JSON.parse(createRes.body);
+  assert.equal(apt.hasIntake, false);
+
+  // 2. Patient submits pre-visit intake survey
+  const intakeBody = {
+    chiefComplaint: 'Đau tức ngực trái khi gắng sức, lan ra cánh tay trái',
+    painLocation: 'Ngực / Tim mạch',
+    onsetDuration: '3 ngày trước',
+    painLevel: 7,
+    symptoms: ['Đau thắt', 'Khó thở khi gắng sức', 'Hồi hộp đánh trống ngực'],
+    currentMedications: 'Aspirin 81mg (1 viên/ngày), Panadol khi đau đầu',
+    medicalHistory: 'Tăng huyết áp 2 năm, chưa từng phẫu thuật',
+    knownAllergies: 'Dị ứng kháng sinh Penicillin (nổi mề đay)',
+    notes: 'Bác sĩ kiểm tra kỹ giúp em vì gia đình có tiền sử bệnh tim mạch.',
+  };
+
+  const submitRes = await handler(
+    eventFor({
+      patientId: 'patient-intake-test',
+      method: 'POST',
+      path: `/appointments/${apt.id}/intake`,
+      pathParameters: { id: apt.id, action: 'intake' },
+      body: intakeBody,
+    }),
+  );
+  assert.equal(submitRes.statusCode, 200);
+  const savedIntake = JSON.parse(submitRes.body);
+  assert.equal(savedIntake.appointmentId, apt.id);
+  assert.equal(savedIntake.painLevel, 7);
+  assert.equal(savedIntake.onsetDuration, '3 ngày trước');
+  assert.ok(savedIntake.symptoms.includes('Đau thắt'));
+  assert.match(savedIntake.knownAllergies, /Penicillin/);
+
+  // 3. GET /appointments/:id/intake retrieves the survey
+  const getRes = await handler(
+    eventFor({
+      patientId: 'patient-intake-test',
+      method: 'GET',
+      path: `/appointments/${apt.id}/intake`,
+      pathParameters: { id: apt.id, action: 'intake' },
+    }),
+  );
+  assert.equal(getRes.statusCode, 200);
+  const fetchedIntake = JSON.parse(getRes.body);
+  assert.equal(fetchedIntake.painLevel, 7);
+
+  // 4. Appointment detail now reflects hasIntake = true
+  const aptRes = await handler(
+    eventFor({
+      patientId: 'patient-intake-test',
+      method: 'GET',
+      path: `/appointments/${apt.id}`,
+      pathParameters: { id: apt.id },
+    }),
+  );
+  assert.equal(aptRes.statusCode, 200);
+  assert.equal(JSON.parse(aptRes.body).hasIntake, true);
+});
+
 
 

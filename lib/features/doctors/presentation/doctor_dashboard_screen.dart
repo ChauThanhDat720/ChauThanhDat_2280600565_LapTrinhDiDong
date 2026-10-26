@@ -15,6 +15,8 @@ import '../../vitals/presentation/health_vitals_screen.dart';
 import '../../payments/presentation/invoice_management_screen.dart';
 import '../../teleconsultation/presentation/doctor_teleconsultations_screen.dart';
 import '../../teleconsultation/presentation/post_care_chat_screen.dart';
+import '../../clinical_intake/data/clinical_intake_repository.dart';
+import '../../clinical_intake/presentation/widgets/intake_summary_card.dart';
 import '../domain/doctor.dart';
 
 class DoctorDashboardScreen extends StatefulWidget {
@@ -1356,6 +1358,23 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
                 ),
                 const SizedBox(height: 18),
 
+                // Pre-visit Clinical Intake Summary for Doctor Review
+                Builder(
+                  builder: (context) {
+                    final intake = ClinicalIntakeStore.instance.getByAppointmentId(widget.appointment.id);
+                    if (intake != null) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          IntakeSummaryCard(intake: intake, isDoctorView: true),
+                          const SizedBox(height: 18),
+                        ],
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+
                 // Paraclinical Diagnostic Orders Section
                 SectionTitle(
                   title: 'Chỉ định Cận lâm sàng (CLS)',
@@ -1858,6 +1877,21 @@ class DoctorExaminationDetailScreen extends StatelessWidget {
                   Text('Lý do khám: ${appointment.reason}'),
                 ],
               ),
+            ),
+            Builder(
+              builder: (context) {
+                final intake = ClinicalIntakeStore.instance.getByAppointmentId(appointment.id);
+                if (intake != null) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 16),
+                      IntakeSummaryCard(intake: intake, isDoctorView: true),
+                    ],
+                  );
+                }
+                return const SizedBox.shrink();
+              },
             ),
             const SizedBox(height: 16),
             _infoCard(

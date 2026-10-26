@@ -100,6 +100,7 @@ const server = http.createServer(async (req, res) => {
         const ratingMatch = pathname.match(/^\/appointments\/([^/]+)\/rating$/);
         const recordMatch = pathname.match(/^\/appointments\/([^/]+)\/medical-record$/);
         const checkinMatch = pathname.match(/^\/appointments\/([^/]+)\/checkin$/);
+        const intakeMatch = pathname.match(/^\/appointments\/([^/]+)\/intake$/);
         const detailMatch = pathname.match(/^\/appointments\/([^/]+)$/);
         if (statusMatch) {
           event.pathParameters = { id: statusMatch[1], action: 'status' };
@@ -111,6 +112,8 @@ const server = http.createServer(async (req, res) => {
           event.pathParameters = { id: recordMatch[1], action: 'medical-record' };
         } else if (checkinMatch) {
           event.pathParameters = { id: checkinMatch[1], action: 'checkin' };
+        } else if (intakeMatch) {
+          event.pathParameters = { id: intakeMatch[1], action: 'intake' };
         } else if (detailMatch) {
           event.pathParameters = { id: detailMatch[1] };
         }

@@ -5,6 +5,8 @@ import '../../../core/theme/app_theme.dart';
 import '../data/appointment_repository.dart';
 import '../domain/appointment.dart';
 import '../domain/hospital_navigation.dart';
+import '../../clinical_intake/data/clinical_intake_repository.dart';
+import '../../clinical_intake/presentation/pre_visit_intake_screen.dart';
 
 class DigitalBoardingPassScreen extends StatefulWidget {
   const DigitalBoardingPassScreen({
@@ -237,6 +239,65 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                             _infoRow('Khoa khám:', '${_appointment.department} - ${_appointment.specialty}'),
                             const SizedBox(height: 10),
                             _infoRow('Thời gian hẹn:', '${_appointment.dateLabel} lúc ${_appointment.time}'),
+                            const SizedBox(height: 10),
+                            ListenableBuilder(
+                              listenable: ClinicalIntakeStore.instance,
+                              builder: (context, _) {
+                                final intake = ClinicalIntakeStore.instance.getByAppointmentId(_appointment.id);
+                                return InkWell(
+                                  onTap: () async {
+                                    await Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => PreVisitIntakeScreen(
+                                          appointment: _appointment,
+                                          repository: widget.repository is RemoteAppointmentRepository
+                                              ? const RemoteClinicalIntakeRepository()
+                                              : const LocalClinicalIntakeRepository(),
+                                        ),
+                                      ),
+                                    );
+                                    setState(() {});
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: intake != null ? const Color(0xFFF0FDF4) : const Color(0xFFFEF3C7),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: intake != null ? const Color(0xFF86EFAC) : const Color(0xFFFCD34D),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          intake != null ? Icons.assignment_turned_in_rounded : Icons.edit_note_rounded,
+                                          size: 16,
+                                          color: intake != null ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            intake != null
+                                                ? 'Triệu chứng tiền khám: Đã nộp (VAS ${intake.painLevel}/10, ${intake.painLocation})'
+                                                : 'Chưa khai báo triệu chứng tiền khám (Nhấn để điền)',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: intake != null ? const Color(0xFF166534) : const Color(0xFF92400E),
+                                            ),
+                                          ),
+                                        ),
+                                        Icon(
+                                          Icons.chevron_right_rounded,
+                                          size: 16,
+                                          color: intake != null ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
 
                             const SizedBox(height: 20),
 

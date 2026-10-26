@@ -131,6 +131,9 @@ export const initSchema = async () => {
   try {
     await run('ALTER TABLE appointments ADD COLUMN parent_appointment_id TEXT');
   } catch (_) {}
+  try {
+    await run('ALTER TABLE appointments ADD COLUMN has_intake INTEGER DEFAULT 0');
+  } catch (_) {}
 
   await run(`
     CREATE INDEX IF NOT EXISTS idx_appointments_patient ON appointments(patient_id);
@@ -370,6 +373,32 @@ export const initSchema = async () => {
     CREATE INDEX IF NOT EXISTS idx_telecon_doctor ON teleconsultation_sessions(doctor_id);
     CREATE INDEX IF NOT EXISTS idx_telecon_patient ON teleconsultation_sessions(patient_id);
     CREATE INDEX IF NOT EXISTS idx_telecon_messages ON teleconsultation_messages(session_id, created_at);
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS clinical_intakes (
+      id TEXT PRIMARY KEY,
+      appointment_id TEXT UNIQUE NOT NULL,
+      patient_id TEXT NOT NULL,
+      chief_complaint TEXT NOT NULL,
+      pain_location TEXT,
+      onset_duration TEXT NOT NULL,
+      pain_level INTEGER NOT NULL DEFAULT 0,
+      symptoms TEXT,
+      current_medications TEXT,
+      medical_history TEXT,
+      known_allergies TEXT,
+      notes TEXT,
+      submitted_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE
+    );
+  `);
+
+  await run(`
+    CREATE INDEX IF NOT EXISTS idx_intakes_appt ON clinical_intakes(appointment_id);
+    CREATE INDEX IF NOT EXISTS idx_intakes_patient ON clinical_intakes(patient_id);
   `);
 
   // Seed default family members for primary patient BN-01

@@ -100,6 +100,20 @@ export const handler = async (event) =>
         : error(404, 'Không tìm thấy lịch khám.');
     }
 
+    // 4c. GET /appointments/{id}/intake & POST /appointments/{id}/intake (Pre-visit Clinical Intake)
+    if (appointmentId && (path.endsWith('/intake') || event.pathParameters?.action === 'intake')) {
+      if (method === 'GET') {
+        const intake = await repository.getIntake(appointmentId);
+        return intake ? json(200, intake) : error(404, 'Chưa có phiếu khai báo tiền khám cho ca này.');
+      }
+      if (method === 'POST' || method === 'PUT') {
+        const body = parseJsonBody(event);
+        const patientId = patientIdFromEvent(event) || body.patientId || 'anonymous';
+        const saved = await repository.saveIntake(appointmentId, patientId, body);
+        return json(200, saved);
+      }
+    }
+
     // 5. GET /appointments (Patient lists own appointments)
     if (method === 'GET' && !appointmentId) {
       requirePatientRole(event);
@@ -108,7 +122,7 @@ export const handler = async (event) =>
     }
 
     // 6. POST /appointments (Patient creates appointment)
-    if (method === 'POST') {
+    if (method === 'POST' && !appointmentId) {
       requirePatientRole(event);
       const patientId = patientIdFromEvent(event);
       const body = parseJsonBody(event);

@@ -54,6 +54,7 @@ const toDomain = (row) => {
     followUpDate: row.follow_up_date || undefined,
     isFollowUp: Boolean(row.is_follow_up),
     parentAppointmentId: row.parent_appointment_id || undefined,
+    hasIntake: Boolean(row.has_intake),
   };
 };
 
@@ -422,7 +423,101 @@ export const getDoctorQueue = async (doctorId, dateString) => {
   };
 };
 
+export const getIntake = async (appointmentId) => {
+  const row = await db.get('SELECT * FROM clinical_intakes WHERE appointment_id = ?', [appointmentId]);
+  if (!row) return null;
+  let symptomsList = [];
+  try {
+    symptomsList = JSON.parse(row.symptoms || '[]');
+  } catch (_) {
+    symptomsList = row.symptoms ? row.symptoms.split(', ') : [];
+  }
+  return {
+    id: row.id,
+    appointmentId: row.appointment_id,
+    patientId: row.patient_id,
+    chiefComplaint: row.chief_complaint,
+    painLocation: row.pain_location,
+    onsetDuration: row.onset_duration,
+    painLevel: row.pain_level,
+    symptoms: symptomsList,
+    currentMedications: row.current_medications,
+    medicalHistory: row.medical_history,
+    knownAllergies: row.known_allergies,
+    notes: row.notes,
+    submittedAt: row.submitted_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+};
+
+export const saveIntake = async (appointmentId, patientId, data) => {
+  const appt = await db.get('SELECT * FROM appointments WHERE id = ?', [appointmentId]);
+  if (!appt) {
+    throw new HttpError(404, 'Không tìm thấy lịch khám.');
+  }
+
+  const existing = await db.get('SELECT * FROM clinical_intakes WHERE appointment_id = ?', [appointmentId]);
+  const now = new Date().toISOString();
+  const id = existing ? existing.id : `intake-${appointmentId}`;
+  const symptomsStr = Array.isArray(data.symptoms) ? JSON.stringify(data.symptoms) : (data.symptoms || '[]');
+
+  if (existing) {
+    await db.run(
+      `UPDATE clinical_intakes SET
+        chief_complaint = ?, pain_location = ?, onset_duration = ?, pain_level = ?,
+        symptoms = ?, current_medications = ?, medical_history = ?, known_allergies = ?,
+        notes = ?, updated_at = ?
+      WHERE id = ?`,
+      [
+        data.chiefComplaint || data.chief_complaint || appt.reason,
+        data.painLocation || data.pain_location || '',
+        data.onsetDuration || data.onset_duration || '1-3 ngày trước',
+        data.painLevel ?? data.pain_level ?? 5,
+        symptomsStr,
+        data.currentMedications || data.current_medications || '',
+        data.medicalHistory || data.medical_history || '',
+        data.knownAllergies || data.known_allergies || '',
+        data.notes || '',
+        now,
+        id,
+      ],
+    );
+  } else {
+    await db.run(
+      `INSERT INTO clinical_intakes (
+        id, appointment_id, patient_id, chief_complaint, pain_location, onset_duration,
+        pain_level, symptoms, current_medications, medical_history, known_allergies,
+        notes, submitted_at, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        appointmentId,
+        patientId || appt.patient_id,
+        data.chiefComplaint || data.chief_complaint || appt.reason,
+        data.painLocation || data.pain_location || '',
+        data.onsetDuration || data.onset_duration || '1-3 ngày trước',
+        data.painLevel ?? data.pain_level ?? 5,
+        symptomsStr,
+        data.currentMedications || data.current_medications || '',
+        data.medicalHistory || data.medical_history || '',
+        data.knownAllergies || data.known_allergies || '',
+        data.notes || '',
+        now,
+        now,
+        now,
+      ],
+    );
+  }
+
+  await db.run('UPDATE appointments SET has_intake = 1, updated_at = ? WHERE id = ?', [now, appointmentId]);
+  return getIntake(appointmentId);
+};
+
 export const resetForTest = async () => {
   await db.run('DELETE FROM appointments');
   await db.run('DELETE FROM idempotency_keys');
+  try {
+    await db.run('DELETE FROM clinical_intakes');
+  } catch (_) {}
 };
