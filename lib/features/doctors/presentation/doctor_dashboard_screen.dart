@@ -17,6 +17,7 @@ import '../../teleconsultation/presentation/doctor_teleconsultations_screen.dart
 import '../../teleconsultation/presentation/post_care_chat_screen.dart';
 import '../../clinical_intake/data/clinical_intake_repository.dart';
 import '../../clinical_intake/presentation/widgets/intake_summary_card.dart';
+import '../../vaccination/presentation/vaccination_passport_screen.dart';
 import '../domain/doctor.dart';
 
 class DoctorDashboardScreen extends StatefulWidget {
@@ -1737,6 +1738,26 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
                         Text('• Dị ứng thuốc: Nhóm Penicillin, Amoxicillin (Khó thở, phát ban cấp năm 2024)', style: TextStyle(fontSize: 12)),
                         Text('• Bệnh nền: Tăng huyết áp vô căn 3 năm, viêm trợt dạ dày nhẹ', style: TextStyle(fontSize: 12)),
                       ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.vaccines_rounded, size: 18),
+                      label: const Text('Xem Sổ Tiêm Chủng & Hộ Chiếu Vắc-Xin'),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const VaccinationPassportScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(height: 14),

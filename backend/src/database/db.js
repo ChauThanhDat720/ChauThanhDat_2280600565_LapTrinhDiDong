@@ -401,6 +401,84 @@ export const initSchema = async () => {
     CREATE INDEX IF NOT EXISTS idx_intakes_patient ON clinical_intakes(patient_id);
   `);
 
+  await run(`
+    CREATE TABLE IF NOT EXISTS vaccinations (
+      id TEXT PRIMARY KEY,
+      patient_id TEXT NOT NULL,
+      family_member_id TEXT DEFAULT 'fam-self',
+      patient_name TEXT NOT NULL,
+      vaccine_name TEXT NOT NULL,
+      target_disease TEXT NOT NULL,
+      dose_number INTEGER NOT NULL DEFAULT 1,
+      total_doses INTEGER NOT NULL DEFAULT 3,
+      batch_number TEXT NOT NULL,
+      manufacturer TEXT NOT NULL,
+      administered_date TEXT NOT NULL,
+      next_dose_date TEXT,
+      facility_name TEXT NOT NULL DEFAULT 'Bệnh viện Đa khoa Quốc tế Smart Hospital',
+      doctor_name TEXT NOT NULL DEFAULT 'BS. Trần Thảo Linh',
+      nurse_name TEXT DEFAULT 'ĐD. Lê Thị Hồng',
+      reaction_status TEXT DEFAULT 'Bình thường, không sốt, không phản ứng phụ',
+      certificate_code TEXT UNIQUE NOT NULL,
+      status TEXT DEFAULT 'completed',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+
+  await run(`
+    CREATE INDEX IF NOT EXISTS idx_vaccine_patient ON vaccinations(patient_id, family_member_id);
+    CREATE INDEX IF NOT EXISTS idx_vaccine_cert ON vaccinations(certificate_code);
+  `);
+
+  // Seed default vaccinations if empty
+  const vacCount = await get('SELECT COUNT(*) as count FROM vaccinations');
+  if (vacCount?.count === 0) {
+    const now = new Date();
+    const dateAdministered1 = new Date(now.getTime() - 60 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const nextDose1 = new Date(now.getTime() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const dateAdministered2 = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const dateAdministered3 = new Date(now.getTime() - 180 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const dateAdministeredChild = new Date(now.getTime() - 300 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const nowIso = now.toISOString();
+
+    await run(`
+      INSERT INTO vaccinations (
+        id, patient_id, family_member_id, patient_name, vaccine_name, target_disease,
+        dose_number, total_doses, batch_number, manufacturer, administered_date, next_dose_date,
+        facility_name, doctor_name, nurse_name, reaction_status, certificate_code, status, created_at, updated_at
+      ) VALUES
+      (
+        'vac-001', 'test-patient-sub-123', 'fam-self', 'Nguyễn Văn An',
+        'Gardasil 9 (Mỹ)', 'Ung thư cổ tử cung, u nhú & mụn cóc sinh dục do HPV',
+        1, 3, 'MSD-VN2408', 'Merck Sharp & Dohme (Mỹ)', '${dateAdministered1}', '${nextDose1}',
+        'Bệnh viện Đa khoa Quốc tế Smart Hospital', 'BS. Trần Thảo Linh', 'ĐD. Lê Thị Hồng',
+        'Vết tiêm hơi căng tức nhẹ, hết sau 24h', 'VAC-2026-VN-98231', 'completed', '${nowIso}', '${nowIso}'
+      ),
+      (
+        'vac-002', 'test-patient-sub-123', 'fam-self', 'Nguyễn Văn An',
+        'Vaxigrip Tetra (Pháp)', 'Cúm mùa tứ giá (A/H1N1, A/H3N2, B/Victoria, B/Yamagata)',
+        1, 1, 'SNF-FR7712', 'Sanofi Pasteur (Pháp)', '${dateAdministered2}', NULL,
+        'Bệnh viện Đa khoa Quốc tế Smart Hospital', 'BS. Trần Thảo Linh', 'ĐD. Lê Thị Hồng',
+        'Bình thường, không sốt, không phản ứng phụ', 'VAC-2026-VN-87123', 'completed', '${nowIso}', '${nowIso}'
+      ),
+      (
+        'vac-003', 'test-patient-sub-123', 'fam-self', 'Nguyễn Văn An',
+        'Engerix B 20mcg (Bỉ)', 'Viêm gan virus B',
+        3, 3, 'GSK-BE8921', 'GlaxoSmithKline - GSK (Bỉ)', '${dateAdministered3}', NULL,
+        'Bệnh viện Đa khoa Quốc tế Smart Hospital', 'BS. Trần Thảo Linh', 'ĐD. Nguyễn Thu Hà',
+        'Bình thường, nồng độ kháng thể Anti-HBs đạt > 1000 mIU/mL', 'VAC-2026-VN-66512', 'completed', '${nowIso}', '${nowIso}'
+      ),
+      (
+        'vac-004', 'test-patient-sub-123', 'fam-child', 'Nguyễn Minh Khang',
+        'Infanrix Hexa 6 trong 1 (Bỉ)', 'Bạch hầu, Ho gà, Uốn ván, Bại liệt, Hib, Viêm gan B',
+        3, 3, 'GSK-6IN1-5521', 'GlaxoSmithKline - GSK (Bỉ)', '${dateAdministeredChild}', NULL,
+        'Bệnh viện Đa khoa Quốc tế Smart Hospital', 'BS. Lê Thị Mai', 'ĐD. Nguyễn Thu Hà',
+        'Sốt nhẹ 37.8 độ C sau tiêm 6h, hạ sốt sau uống Paracetamol', 'VAC-2026-VN-33109', 'completed', '${nowIso}', '${nowIso}'
+      );
+    `);
+  }
+
   // Seed default family members for primary patient BN-01
   const famCount = await get('SELECT COUNT(*) as count FROM family_members');
   if (famCount?.count === 0) {

@@ -6,6 +6,7 @@ import 'package:smart_hospital/features/appointments/presentation/appointment_li
 import 'package:smart_hospital/features/doctors/presentation/doctor_dashboard_screen.dart';
 import 'package:smart_hospital/features/doctors/presentation/doctor_screens.dart';
 import 'package:smart_hospital/features/home/presentation/home_screen.dart';
+import 'package:smart_hospital/features/vaccination/data/vaccination_repository.dart';
 
 void main() {
   group('Follow-up Appointment Domain Tests', () {
@@ -88,6 +89,7 @@ void main() {
       );
 
       AppointmentStore.instance.clearForTest();
+      VaccinationStore.instance.clearForTest();
       AppointmentStore.instance.addAppointment(completedApt);
 
       await tester.pumpWidget(

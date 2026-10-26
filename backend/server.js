@@ -11,6 +11,7 @@ import { handler as healthVitalsHandler } from './src/handlers/health_vitals.js'
 import { handler as paymentsHandler } from './src/handlers/payments.js';
 import { handler as familyHandler } from './src/handlers/family.js';
 import { handler as teleconsultationsHandler } from './src/handlers/teleconsultations.js';
+import { handler as vaccinationsHandler } from './src/handlers/vaccinations.js';
 
 const PORT = process.env.PORT || 3000;
 
@@ -218,6 +219,22 @@ const server = http.createServer(async (req, res) => {
         event.pathParameters = { id: sessionMatch[1] };
       }
       result = await teleconsultationsHandler(event);
+    } else if (pathname === '/vaccinations' || pathname.startsWith('/vaccinations/')) {
+      const protocolsMatch = pathname.match(/^\/vaccinations\/protocols$/);
+      const upcomingMatch = pathname.match(/^\/vaccinations\/upcoming$/);
+      const passportMatch = pathname.match(/^\/vaccinations\/passport\/([^/]+)$/);
+      const idMatch = pathname.match(/^\/vaccinations\/([^/]+)$/);
+      if (protocolsMatch) {
+        event.path = '/vaccinations/protocols';
+      } else if (upcomingMatch) {
+        event.path = '/vaccinations/upcoming';
+      } else if (passportMatch) {
+        event.pathParameters = { code: passportMatch[1] };
+        event.path = pathname;
+      } else if (idMatch) {
+        event.pathParameters = { id: idMatch[1] };
+      }
+      result = await vaccinationsHandler(event);
     } else {
       result = {
         statusCode: 404,

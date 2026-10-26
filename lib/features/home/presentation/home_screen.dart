@@ -30,6 +30,9 @@ import '../../family/presentation/family_members_screen.dart';
 import '../../teleconsultation/presentation/post_care_chat_screen.dart';
 import '../../clinical_intake/data/clinical_intake_repository.dart';
 import '../../clinical_intake/presentation/pre_visit_intake_screen.dart';
+import '../../vaccination/data/vaccination_repository.dart';
+import '../../vaccination/domain/vaccination_record.dart';
+import '../../vaccination/presentation/vaccination_passport_screen.dart';
 
 class PatientHomeScreen extends StatefulWidget {
   const PatientHomeScreen({
@@ -420,11 +423,35 @@ class _HomeTabState extends State<_HomeTab> {
                         },
                       ),
                       _Action(
+                        icon: Icons.vaccines_rounded,
+                        title: 'Sổ tiêm chủng',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const VaccinationPassportScreen(),
+                          ),
+                        ),
+                      ),
+                      _Action(
                         icon: Icons.support_agent_outlined,
                         title: 'Hỗ trợ khẩn cấp',
                         onTap: () => _showEmergencySupportDialog(context),
                       ),
                     ],
+                  ),
+                  ListenableBuilder(
+                    listenable: VaccinationStore.instance,
+                    builder: (context, _) {
+                      final upcomingVaccines = VaccinationStore.instance.getUpcoming();
+                      if (upcomingVaccines.isNotEmpty && upcomingVaccines.first.isDueSoon) {
+                        return Column(
+                          children: [
+                            const SizedBox(height: 20),
+                            _buildVaccineDueSoonCard(context, upcomingVaccines.first),
+                          ],
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
                   ),
                   if (_pendingFollowUp != null) ...[
                     const SizedBox(height: 24),
@@ -685,6 +712,139 @@ class _HomeTabState extends State<_HomeTab> {
                     style:
                         TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVaccineDueSoonCard(BuildContext context, VaccinationRecord vac) {
+    final days = vac.daysUntilNextDose ?? 0;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDFA),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.35)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D9488).withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D9488).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.vaccines_rounded, color: Color(0xFF0D9488), size: 22),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'LỊCH TIÊM CHỦNG SẮP TỚI',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F766E),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    Text(
+                      'Theo phác đồ tiêm chủng quốc gia',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF134E4A)),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCCFBF1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.4)),
+                ),
+                child: Text(
+                  '💉 Còn $days ngày đến hẹn',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F766E),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Mũi ${vac.doseNumber + 1}/${vac.totalDoses}: ${vac.vaccineName}',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: Color(0xFF0F172A)),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Phòng ngừa: ${vac.targetDisease} • Ngày hẹn: ${vac.nextDoseDateLabel}',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                flex: 6,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF0D9488),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.calendar_month_rounded, size: 18),
+                  label: const Text('1 chạm Đặt lịch tiêm', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  onPressed: () {
+                    final doc = doctors.first;
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => BookAppointmentScreen(
+                          doctor: doc,
+                          initialDate: vac.nextDoseDate,
+                          initialReason: 'Tiêm chủng vắc-xin: ${vac.vaccineName} (Mũi ${vac.doseNumber + 1})',
+                          repository: widget.repository,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 4,
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0D9488),
+                    side: const BorderSide(color: Color(0xFF0D9488)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const VaccinationPassportScreen(),
+                      ),
+                    );
+                  },
+                  child: const Text('Xem sổ tiêm', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 ),
               ),
             ],
