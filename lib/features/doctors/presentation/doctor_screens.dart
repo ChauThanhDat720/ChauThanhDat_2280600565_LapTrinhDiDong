@@ -8,6 +8,8 @@ import '../../appointments/data/appointment_repository.dart';
 import '../../appointments/presentation/appointment_success_screen.dart';
 import '../../departments/domain/department.dart' as hospital;
 import '../domain/doctor.dart';
+import '../../../core/session/patient_session.dart';
+import '../../family/presentation/family_profile_manager.dart';
 
 class DoctorListScreen extends StatefulWidget {
   const DoctorListScreen({super.key, this.initialDepartmentId});
@@ -229,10 +231,18 @@ class BookAppointmentScreen extends StatefulWidget {
     required this.doctor,
     this.repository = const LocalAppointmentRepository(),
     this.nowProvider,
+    this.initialDate,
+    this.initialReason,
+    this.isFollowUp = false,
+    this.parentAppointmentId,
   });
   final Doctor doctor;
   final AppointmentRepository repository;
   final DateTime Function()? nowProvider;
+  final DateTime? initialDate;
+  final String? initialReason;
+  final bool isFollowUp;
+  final String? parentAppointmentId;
   @override
   State<BookAppointmentScreen> createState() => _BookAppointmentScreenState();
 }
@@ -245,6 +255,19 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   bool _loadingSlots = false;
   Object? _slotError;
   List<AppointmentSlot> _slots = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialReason != null && widget.initialReason!.isNotEmpty) {
+      _reason.text = widget.initialReason!;
+    }
+    if (widget.initialDate != null) {
+      _selectedDay = widget.initialDate;
+      _loadSlots(widget.initialDate!);
+    }
+  }
+
   @override
   void dispose() {
     _reason.dispose();
@@ -274,7 +297,10 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   }
 
   Future<void> _loadSlots(DateTime date) async {
-    setState(() => _loadingSlots = true);
+    setState(() {
+      _loadingSlots = true;
+      _slotError = null;
+    });
     try {
       final slots = await widget.repository.getAvailableSlots(
         widget.doctor.id,
@@ -348,6 +374,14 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
 
     setState(() => _submitting = true);
     try {
+      final currentMember = FamilyProfileManager.instance.activeMember;
+      final sessionName = PatientSession.instance.name.isNotEmpty
+          ? PatientSession.instance.name
+          : 'Nguyễn Văn An';
+      final patientName = (currentMember == null || currentMember.isSelf)
+          ? sessionName
+          : '${currentMember.fullName} (${currentMember.relationshipLabel})';
+
       final appointment = await widget.repository.createAppointment(
         Appointment(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -358,6 +392,11 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
           date: _selectedDay!,
           time: _time!,
           reason: _reason.text.trim(),
+          patientId: currentMember?.id ?? '',
+          patientName: patientName,
+          status: AppointmentStatus.confirmed,
+          isFollowUp: widget.isFollowUp,
+          parentAppointmentId: widget.parentAppointmentId,
         ),
       );
       if (!mounted) return;
@@ -401,6 +440,49 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (widget.isFollowUp) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFCD34D)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.event_repeat_rounded,
+                          color: Color(0xFFD97706), size: 24),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'LỊCH TÁI KHÁM THEO CHỈ ĐỊNH',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Color(0xFF92400E),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Bác sĩ ${widget.doctor.name} đã chỉ định bạn tái khám vào ngày ${widget.initialDate != null ? _dateLabel(widget.initialDate!) : "sắp tới"}. Hồ sơ bệnh án và lịch sử xét nghiệm cũ sẽ được tự động liên kết.',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF78350F),
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               InfoTile(
                 icon: Icons.medical_services_outlined,
                 title: widget.doctor.name,

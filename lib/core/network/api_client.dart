@@ -29,6 +29,9 @@ class ApiClient {
   Future<dynamic> post(String path, {Object? body}) =>
       _send('POST', path, body: body);
 
+  Future<dynamic> delete(String path, {Map<String, String>? query}) =>
+      _send('DELETE', path, query: query);
+
   Future<dynamic> patch(String path, {Object? body}) =>
       _send('PATCH', path, body: body);
 

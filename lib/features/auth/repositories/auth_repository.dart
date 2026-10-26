@@ -77,13 +77,21 @@ class LocalAuthRepository implements AuthRepository {
     return PatientSession.instance.isLoggedIn ? _user() : null;
   }
 
-  AppUser _user() => AppUser(
-    id: 'local-${PatientSession.instance.email}',
-    fullName: PatientSession.instance.name,
-    email: PatientSession.instance.email,
-    phoneNumber: PatientSession.instance.phone,
-    role: UserRole.patient,
-  );
+  AppUser _user() {
+    final email = PatientSession.instance.email.toLowerCase();
+    final role = email.contains('doctor')
+        ? UserRole.doctor
+        : email.contains('admin')
+        ? UserRole.admin
+        : UserRole.patient;
+    return AppUser(
+      id: 'local-${PatientSession.instance.email}',
+      fullName: PatientSession.instance.name,
+      email: PatientSession.instance.email,
+      phoneNumber: PatientSession.instance.phone,
+      role: role,
+    );
+  }
   @override
   Future<void> signOut() => PatientSession.instance.clear();
   @override

@@ -1,6 +1,7 @@
 import '../../../core/network/api_client.dart';
 import '../../doctors/domain/doctor.dart';
 import '../domain/appointment.dart';
+import '../domain/hospital_navigation.dart';
 
 abstract interface class AppointmentRepository {
   Future<List<AppointmentSlot>> getAvailableSlots(
@@ -12,6 +13,24 @@ abstract interface class AppointmentRepository {
   Future<List<Appointment>> getMyAppointments();
   Future<Appointment?> getAppointmentById(String id);
   Future<Appointment> cancelAppointment(String id, {String? reason});
+  Future<List<Appointment>> getDoctorAppointments({
+    String? doctorId,
+    DateTime? date,
+  });
+  Future<Appointment> updateAppointmentStatus(
+    String id,
+    AppointmentStatus status, {
+    String? note,
+    String? diagnosis,
+    String? prescription,
+    DateTime? followUpDate,
+  });
+  Future<Appointment> rateAppointment(
+    String id, {
+    required int rating,
+    String? reviewNote,
+  });
+  Future<Appointment> checkinAppointment(String id, {String? roomNumber});
 }
 
 class LocalAppointmentRepository implements AppointmentRepository {
@@ -109,6 +128,9 @@ class LocalAppointmentRepository implements AppointmentRepository {
             ? 'local-${now.microsecondsSinceEpoch}'
             : appointment.id,
         patientId: _patientId,
+        patientName: appointment.patientName.isNotEmpty
+            ? appointment.patientName
+            : 'Nguyễn Văn An (BN-01)',
         doctorId: appointment.doctorId,
         doctorName: appointment.doctorName,
         specialty: appointment.specialty,
@@ -117,9 +139,11 @@ class LocalAppointmentRepository implements AppointmentRepository {
         date: appointment.date,
         time: appointment.time,
         reason: appointment.reason.trim(),
-        status: AppointmentStatus.pending,
+        status: appointment.status,
         createdAt: now,
         updatedAt: now,
+        isFollowUp: appointment.isFollowUp,
+        parentAppointmentId: appointment.parentAppointmentId,
       );
       AppointmentStore.instance.addAppointment(saved);
       return saved;
@@ -160,6 +184,120 @@ class LocalAppointmentRepository implements AppointmentRepository {
         updatedAt: DateTime.now(),
         cancelledAt: DateTime.now(),
         cancellationReason: reason,
+      );
+      AppointmentStore.instance.replaceAppointment(updated);
+      return updated;
+    });
+    _serial = operation.then<void>((_) {}, onError: (_, _) {});
+    return operation;
+  }
+
+
+  @override
+  Future<List<Appointment>> getDoctorAppointments({
+    String? doctorId,
+    DateTime? date,
+  }) async {
+    final all = AppointmentStore.instance.appointments;
+    return List.unmodifiable(
+      all.where((item) {
+        if (doctorId != null && item.doctorId != doctorId) return false;
+        if (date != null &&
+            (item.date.year != date.year ||
+                item.date.month != date.month ||
+                item.date.day != date.day)) {
+          return false;
+        }
+        return true;
+      }),
+    );
+  }
+
+  @override
+  Future<Appointment> updateAppointmentStatus(
+    String id,
+    AppointmentStatus status, {
+    String? note,
+    String? diagnosis,
+    String? prescription,
+    DateTime? followUpDate,
+  }) {
+    final operation = _serial.then((_) async {
+      final index = AppointmentStore.instance.appointments.indexWhere(
+        (item) => item.id == id,
+      );
+      if (index < 0) {
+        throw StateError('Không tìm thấy lịch khám.');
+      }
+      final current = AppointmentStore.instance.appointments[index];
+      final now = DateTime.now();
+      final updated = current.copyWith(
+        status: status,
+        updatedAt: now,
+        statusNote: note,
+        diagnosis: diagnosis,
+        prescription: prescription,
+        cancelledAt: status == AppointmentStatus.cancelled ? now : null,
+        cancellationReason: status == AppointmentStatus.cancelled ? note : null,
+        followUpDate: followUpDate ?? current.followUpDate,
+      );
+      AppointmentStore.instance.replaceAppointment(updated);
+      return updated;
+    });
+    _serial = operation.then<void>((_) {}, onError: (_, _) {});
+    return operation;
+  }
+
+  @override
+  Future<Appointment> rateAppointment(
+    String id, {
+    required int rating,
+    String? reviewNote,
+  }) async {
+    final operation = _serial.then<Appointment>((_) async {
+      final index = AppointmentStore.instance.appointments
+          .indexWhere((element) => element.id == id);
+      if (index == -1) {
+        throw StateError('Appointment $id not found');
+      }
+      final current = AppointmentStore.instance.appointments[index];
+      final updated = current.copyWith(
+        rating: rating,
+        reviewNote: reviewNote,
+        reviewedAt: DateTime.now(),
+      );
+      AppointmentStore.instance.replaceAppointment(updated);
+      return updated;
+    });
+    _serial = operation.then<void>((_) {}, onError: (_, _) {});
+    return operation;
+  }
+
+  @override
+  Future<Appointment> checkinAppointment(String id, {String? roomNumber}) {
+    final operation = _serial.then((_) async {
+      final index = AppointmentStore.instance.appointments.indexWhere((a) => a.id == id);
+      if (index < 0) {
+        throw StateError('Không tìm thấy lịch khám.');
+      }
+      final current = AppointmentStore.instance.appointments[index];
+      if (current.status == AppointmentStatus.checkedIn) return current;
+
+      final doctorAppts = AppointmentStore.instance.appointments
+          .where((a) => a.doctorId == current.doctorId && a.queueNumber != null)
+          .toList();
+      final nextQueue = doctorAppts.length + 1;
+      final updated = current.copyWith(
+        status: AppointmentStatus.checkedIn,
+        queueNumber: nextQueue,
+        checkedInAt: DateTime.now(),
+        roomNumber: roomNumber ??
+            current.roomNumber ??
+            HospitalNavigationResolver.getDoctorClinicRoom(
+              current.doctorId,
+              department: current.department,
+            ),
+        updatedAt: DateTime.now(),
       );
       AppointmentStore.instance.replaceAppointment(updated);
       return updated;
@@ -222,6 +360,69 @@ class RemoteAppointmentRepository implements AppointmentRepository {
           body: {'reason': reason},
         ) as Map<String, dynamic>,
       );
+
+  @override
+  Future<List<Appointment>> getDoctorAppointments({
+    String? doctorId,
+    DateTime? date,
+  }) async {
+    final query = <String, String>{};
+    if (date != null) query['date'] = date.toIso8601String().substring(0, 10);
+    final result = await _client.get('/doctors/me/appointments', query: query);
+    final items = result is Map<String, dynamic> ? result['items'] : result;
+    return (items as List? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(Appointment.fromJson)
+        .toList();
+  }
+
+  @override
+  Future<Appointment> updateAppointmentStatus(
+    String id,
+    AppointmentStatus status, {
+    String? note,
+    String? diagnosis,
+    String? prescription,
+    DateTime? followUpDate,
+  }) async {
+    final result = await _client.patch(
+      '/appointments/$id/status',
+      body: {
+        'status': status.name,
+        'note': ?note,
+        'diagnosis': ?diagnosis,
+        'prescription': ?prescription,
+        'followUpDate': ?followUpDate?.toIso8601String(),
+      },
+    );
+    return Appointment.fromJson(result as Map<String, dynamic>);
+  }
+
+  @override
+  Future<Appointment> rateAppointment(
+    String id, {
+    required int rating,
+    String? reviewNote,
+  }) async {
+    final result = await _client.patch(
+      '/appointments/$id/rating',
+      body: {
+        'rating': rating,
+        'reviewNote': ?reviewNote,
+      },
+    );
+    return Appointment.fromJson(result as Map<String, dynamic>);
+  }
+
+  @override
+  Future<Appointment> checkinAppointment(String id, {String? roomNumber}) async {
+    final result = await _client.post(
+      '/appointments/$id/checkin',
+      body: {'roomNumber': ?roomNumber},
+    );
+    return Appointment.fromJson(result as Map<String, dynamic>);
+  }
+
   List<Appointment> _items(dynamic result) {
     final items = result is Map<String, dynamic> ? result['items'] : result;
     return (items as List? ?? const [])

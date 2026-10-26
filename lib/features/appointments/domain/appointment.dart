@@ -5,19 +5,27 @@ import '../../../core/utils/app_timezone.dart';
 enum AppointmentStatus {
   pending,
   confirmed,
+  checkedIn,
   completed,
   cancelled;
 
-  String get wireName => name.toUpperCase();
+  String get wireName => switch (this) {
+    checkedIn => 'CHECKED_IN',
+    _ => name.toUpperCase(),
+  };
+
   String get label => switch (this) {
     pending => 'Chờ xác nhận',
     confirmed => 'Đã xác nhận',
+    checkedIn => 'Đã tiếp đón (Đang chờ)',
     completed => 'Đã hoàn thành',
     cancelled => 'Đã hủy',
   };
+
   static AppointmentStatus fromJson(Object? value) =>
       switch (value.toString().toUpperCase()) {
         'CONFIRMED' => confirmed,
+        'CHECKED_IN' => checkedIn,
         'COMPLETED' => completed,
         'CANCELLED' => cancelled,
         _ => pending,
@@ -52,13 +60,27 @@ class Appointment {
     required this.time,
     required this.reason,
     this.patientId = '',
+    this.patientName = 'Bệnh nhân',
     this.departmentId = '',
     this.status = AppointmentStatus.pending,
     this.createdAt,
     this.updatedAt,
     this.cancelledAt,
     this.cancellationReason,
+    this.diagnosis,
+    this.prescription,
+    this.statusNote,
+    this.rating,
+    this.reviewNote,
+    this.reviewedAt,
+    this.queueNumber,
+    this.checkedInAt,
+    this.roomNumber,
+    this.followUpDate,
+    this.isFollowUp = false,
+    this.parentAppointmentId,
   });
+
   final String id,
       doctorId,
       doctorName,
@@ -67,11 +89,16 @@ class Appointment {
       time,
       reason,
       patientId,
+      patientName,
       departmentId;
   final DateTime date;
   final AppointmentStatus status;
-  final DateTime? createdAt, updatedAt, cancelledAt;
-  final String? cancellationReason;
+  final DateTime? createdAt, updatedAt, cancelledAt, reviewedAt, checkedInAt, followUpDate;
+  final String? cancellationReason, diagnosis, prescription, statusNote, reviewNote, roomNumber;
+  final int? rating, queueNumber;
+  final bool isFollowUp;
+  final String? parentAppointmentId;
+
   String get appointmentId => id;
   DateTime get startTime => DateTime(
     date.year,
@@ -82,11 +109,38 @@ class Appointment {
   );
   DateTime get endTime => startTime.add(const Duration(minutes: 30));
   String get dateLabel => AppTimezone.date(date);
+  String? get followUpDateLabel => followUpDate != null ? AppTimezone.date(followUpDate!) : null;
+
+  bool get hasActiveFollowUp =>
+      status == AppointmentStatus.completed && followUpDate != null;
+
+  int? get followUpDaysRemaining {
+    if (followUpDate == null) return null;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target =
+        DateTime(followUpDate!.year, followUpDate!.month, followUpDate!.day);
+    return target.difference(today).inDays;
+  }
+
   Appointment copyWith({
     AppointmentStatus? status,
     DateTime? updatedAt,
     DateTime? cancelledAt,
     String? cancellationReason,
+    String? patientName,
+    String? diagnosis,
+    String? prescription,
+    String? statusNote,
+    int? rating,
+    String? reviewNote,
+    DateTime? reviewedAt,
+    int? queueNumber,
+    DateTime? checkedInAt,
+    String? roomNumber,
+    DateTime? followUpDate,
+    bool? isFollowUp,
+    String? parentAppointmentId,
   }) => Appointment(
     id: id,
     doctorId: doctorId,
@@ -97,13 +151,27 @@ class Appointment {
     time: time,
     reason: reason,
     patientId: patientId,
+    patientName: patientName ?? this.patientName,
     departmentId: departmentId,
     status: status ?? this.status,
     createdAt: createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     cancelledAt: cancelledAt ?? this.cancelledAt,
     cancellationReason: cancellationReason ?? this.cancellationReason,
+    diagnosis: diagnosis ?? this.diagnosis,
+    prescription: prescription ?? this.prescription,
+    statusNote: statusNote ?? this.statusNote,
+    rating: rating ?? this.rating,
+    reviewNote: reviewNote ?? this.reviewNote,
+    reviewedAt: reviewedAt ?? this.reviewedAt,
+    queueNumber: queueNumber ?? this.queueNumber,
+    checkedInAt: checkedInAt ?? this.checkedInAt,
+    roomNumber: roomNumber ?? this.roomNumber,
+    followUpDate: followUpDate ?? this.followUpDate,
+    isFollowUp: isFollowUp ?? this.isFollowUp,
+    parentAppointmentId: parentAppointmentId ?? this.parentAppointmentId,
   );
+
   factory Appointment.fromJson(Map<String, dynamic> j) {
     final start = AppTimezone.fromUtc(
       DateTime.parse((j['startTime'] ?? j['scheduledAt']) as String),
@@ -111,6 +179,7 @@ class Appointment {
     return Appointment(
       id: (j['appointmentId'] ?? j['id'] ?? '') as String,
       patientId: j['patientId'] as String? ?? '',
+      patientName: j['patientName'] as String? ?? 'Bệnh nhân',
       doctorId: j['doctorId'] as String? ?? '',
       doctorName: j['doctorName'] as String? ?? '',
       specialty: j['specialty'] as String? ?? '',
@@ -125,16 +194,42 @@ class Appointment {
       updatedAt: DateTime.tryParse(j['updatedAt'] as String? ?? ''),
       cancelledAt: DateTime.tryParse(j['cancelledAt'] as String? ?? ''),
       cancellationReason: j['cancellationReason'] as String?,
+      diagnosis: j['diagnosis'] as String?,
+      prescription: j['prescription'] as String?,
+      statusNote: j['statusNote'] as String?,
+      rating: j['rating'] as int?,
+      reviewNote: j['reviewNote'] as String?,
+      reviewedAt: DateTime.tryParse(j['reviewedAt'] as String? ?? ''),
+      queueNumber: (j['queueNumber'] ?? j['queue_number']) as int?,
+      checkedInAt: DateTime.tryParse((j['checkedInAt'] ?? j['checked_in_at']) as String? ?? ''),
+      roomNumber: (j['roomNumber'] ?? j['room_number']) as String?,
+      followUpDate: DateTime.tryParse(j['followUpDate'] as String? ?? j['follow_up_date'] as String? ?? ''),
+      isFollowUp: (j['isFollowUp'] ?? j['is_follow_up']) as bool? ?? false,
+      parentAppointmentId: (j['parentAppointmentId'] ?? j['parent_appointment_id']) as String?,
     );
   }
+
   Map<String, dynamic> toJson() => {
     'appointmentId': id,
     'doctorId': doctorId,
     'departmentId': departmentId,
+    'patientName': patientName,
     'startTime': AppTimezone.toUtc(startTime).toIso8601String(),
     'endTime': AppTimezone.toUtc(endTime).toIso8601String(),
     'reason': reason,
     'status': status.wireName,
+    'diagnosis': diagnosis,
+    'prescription': prescription,
+    'statusNote': statusNote,
+    'rating': rating,
+    'reviewNote': reviewNote,
+    'reviewedAt': reviewedAt?.toIso8601String(),
+    'queueNumber': queueNumber,
+    'checkedInAt': checkedInAt?.toIso8601String(),
+    'roomNumber': roomNumber,
+    'follow_up_date': followUpDate?.toIso8601String(),
+    'is_follow_up': isFollowUp,
+    'parent_appointment_id': parentAppointmentId,
   };
 }
 
@@ -145,6 +240,7 @@ class AppointmentStore extends ChangeNotifier {
   final List<Appointment> _appointments = [];
   List<Appointment> get appointments => List.unmodifiable(_appointments);
   List<Appointment> getAppointments() => appointments;
+
   void addAppointment(Appointment appointment) {
     _appointments.add(appointment);
     _appointments.sort((a, b) => a.startTime.compareTo(b.startTime));

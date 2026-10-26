@@ -20,6 +20,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _password = TextEditingController();
   bool _obscure = true;
   bool _loading = false;
+  bool _isDoctorMode = false;
+
   @override
   void dispose() {
     _name.dispose();
@@ -74,36 +76,156 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Center(child: HospitalLogo()),
                   const SizedBox(height: 28),
                   Text(
-                    'Welcome back',
+                    _isDoctorMode ? 'Hệ thống Y tế Bác sĩ' : 'Smart Hospital',
                     style: Theme.of(context).textTheme.headlineMedium
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Sign in to manage your health journey.',
-                    style: TextStyle(color: AppColors.mutedText),
+                  const SizedBox(height: 6),
+                  Text(
+                    _isDoctorMode
+                        ? 'Cổng Bác sĩ & Bệnh án Điện tử (EMR/HIS)'
+                        : 'Đăng nhập để quản lý lịch khám và sức khỏe gia đình.',
+                    style: const TextStyle(color: AppColors.mutedText),
                   ),
-                  const SizedBox(height: 32),
-                  if (authRepository.isDemo)
-                    TextFormField(
-                      controller: _name,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Tên hiển thị',
-                        prefixIcon: Icon(Icons.person_outline),
-                      ),
-                      validator: (value) =>
-                          value == null || value.trim().length < 2
-                          ? 'Nhập tên của bạn'
-                          : null,
+                  const SizedBox(height: 20),
+                  // Role Selector Tabs
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
                     ),
-                  const SizedBox(height: 16),
+                    padding: const EdgeInsets.all(4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _isDoctorMode = false;
+                                _email.clear();
+                                _password.clear();
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: !_isDoctorMode ? Colors.white : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: !_isDoctorMode
+                                    ? [
+                                        const BoxShadow(
+                                          color: Color(0x14000000),
+                                          blurRadius: 4,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.person_outline,
+                                    size: 18,
+                                    color: !_isDoctorMode ? AppColors.primary : AppColors.mutedText,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Bệnh nhân',
+                                    style: TextStyle(
+                                      fontWeight: !_isDoctorMode ? FontWeight.bold : FontWeight.normal,
+                                      color: !_isDoctorMode ? AppColors.primary : AppColors.mutedText,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _isDoctorMode = true;
+                                _email.text = 'doctor.linh@hospital.com';
+                                _password.text = '123456';
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: _isDoctorMode ? Colors.white : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: _isDoctorMode
+                                    ? [
+                                        const BoxShadow(
+                                          color: Color(0x14000000),
+                                          blurRadius: 4,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.medical_services_outlined,
+                                    size: 18,
+                                    color: _isDoctorMode ? const Color(0xFF0D9488) : AppColors.mutedText,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Cán bộ Y tế / Bác sĩ',
+                                    style: TextStyle(
+                                      fontWeight: _isDoctorMode ? FontWeight.bold : FontWeight.normal,
+                                      color: _isDoctorMode ? const Color(0xFF0D9488) : AppColors.mutedText,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  if (_isDoctorMode) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0D9488).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: const Color(0xFF0D9488).withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.shield_outlined, color: Color(0xFF0D9488), size: 20),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Khu vực giới hạn bảo mật EMR/HIS: Dành riêng cho Bác sĩ có chứng chỉ hành nghề được cấp phép.',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF0D9488), height: 1.3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   TextFormField(
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.mail_outline),
+                    decoration: InputDecoration(
+                      labelText: _isDoctorMode ? 'Mã Bác sĩ / Email Bệnh viện' : 'Email',
+                      prefixIcon: Icon(_isDoctorMode ? Icons.badge_outlined : Icons.mail_outline),
                     ),
                     validator: emailValidator,
                   ),
@@ -112,7 +234,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: _password,
                     obscureText: _obscure,
                     decoration: InputDecoration(
-                      labelText: 'Password',
+                      labelText: _isDoctorMode ? 'Mật khẩu bảo mật Y tế' : 'Password',
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -150,7 +272,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               strokeWidth: 2,
                             ),
                           )
-                        : const Text('Sign in'),
+                        : Text(_isDoctorMode ? 'Đăng nhập Bàn khám Bác sĩ' : 'Sign in'),
                   ),
                   const SizedBox(height: 24),
                   Row(
@@ -182,18 +304,54 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     child: const Text('Create patient account'),
                   ),
-                  const SizedBox(height: 24),
-                  if (authRepository.isDemo)
-                    const Center(
-                      child: Text(
-                        'Chế độ demo: chỉ có vai trò Bệnh nhân và không phải phiên Cognito.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppColors.mutedText,
-                          fontSize: 12,
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF0D9488),
+                            side: const BorderSide(color: Color(0xFF0D9488)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          icon: const Icon(Icons.medical_services_rounded, size: 18),
+                          label: const Text('BS. Linh Demo', style: TextStyle(fontSize: 12.5)),
+                          onPressed: () {
+                            _email.text = 'doctor.linh@hospital.com';
+                            _password.text = '123456';
+                            _login();
+                          },
                         ),
                       ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                          ),
+                          icon: const Icon(Icons.person_rounded, size: 18),
+                          label: const Text('Bệnh nhân Demo', style: TextStyle(fontSize: 12.5)),
+                          onPressed: () {
+                            _email.text = 'patient.an@hospital.com';
+                            _password.text = '123456';
+                            _login();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Center(
+                    child: Text(
+                      'Tài khoản Cán bộ Y tế / Bác sĩ: doctor.linh@hospital.com',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.mutedText,
+                        fontSize: 12,
+                      ),
                     ),
+                  ),
                 ],
               ),
             ),

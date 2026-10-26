@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/models/app_user.dart';
+import '../../doctors/presentation/doctor_dashboard_screen.dart';
 import '../../home/presentation/home_screen.dart';
 
 Widget homeForRole(UserRole role) => switch (role) {
@@ -13,17 +14,7 @@ Widget homeForRole(UserRole role) => switch (role) {
 class DoctorHomeScreen extends StatelessWidget {
   const DoctorHomeScreen({super.key});
   @override
-  Widget build(BuildContext c) => const _PlaceholderHome(
-    title: 'Trang bác sĩ',
-    items: [
-      'Lịch khám của tôi',
-      'Bệnh nhân được phân công',
-      'Hồ sơ bệnh án',
-      'Kết quả khám',
-      'Đơn thuốc',
-      'Thông tin cá nhân',
-    ],
-  );
+  Widget build(BuildContext c) => const DoctorDashboardScreen();
 }
 
 class AdminDashboardScreen extends StatelessWidget {

@@ -1,27 +1,144 @@
-import * as repository from '../repositories/in_memory_appointment_repository.js';
-import { patientIdFromEvent, requirePatientRole } from '../utils/auth.js';
+import * as repository from '../repositories/sqlite_appointment_repository.js';
+import {
+  doctorIdFromEvent,
+  patientIdFromEvent,
+  requireDoctorRole,
+  requirePatientRole,
+} from '../utils/auth.js';
 import { error, handle, json, parseJsonBody } from '../utils/http.js';
-import { appointmentInput } from '../utils/validation.js';
+import { appointmentInput, ratingInput, statusInput } from '../utils/validation.js';
 
-export const handler = async (event) => handle(async () => {
-  requirePatientRole(event);
-  const patientId = patientIdFromEvent(event);
-  const method = event.requestContext?.http?.method ?? event.httpMethod;
-  const appointmentId = event.pathParameters?.id;
+export const handler = async (event) =>
+  handle(async () => {
+    const method = event.requestContext?.http?.method ?? event.httpMethod;
+    const path = event.path || '';
+    const appointmentId = event.pathParameters?.id;
+    const doctorIdParam = event.pathParameters?.doctorId;
 
-  if (method === 'GET' && !appointmentId) {
-    return json(200, { items: repository.listByPatient(patientId) });
-  }
-  if (method === 'POST') {
-    return json(201, repository.create(patientId, appointmentInput(parseJsonBody(event))));
-  }
-  if (method === 'GET' && appointmentId) {
-    const appointment = repository.getForPatient(patientId, appointmentId);
-    return appointment ? json(200, appointment) : error(404, 'Không tìm thấy lịch khám.');
-  }
-  if (method === 'PATCH' && appointmentId) {
-    const appointment = repository.cancelForPatient(patientId, appointmentId);
-    return appointment ? json(200, appointment) : error(404, 'Không tìm thấy lịch khám.');
-  }
-  return error(405, 'Phương thức không được hỗ trợ.');
-});
+    // 1. GET /doctors/{doctorId}/availability?date=YYYY-MM-DD
+    if (doctorIdParam && path.includes('/availability')) {
+      const date =
+        event.queryStringParameters?.date ??
+        new Date().toISOString().split('T')[0];
+      return json(200, await repository.getDoctorAvailability(doctorIdParam, date));
+    }
+
+    // 1b. GET /doctors/{doctorId}/queue?date=YYYY-MM-DD
+    if (doctorIdParam && path.includes('/queue')) {
+      const date =
+        event.queryStringParameters?.date ??
+        new Date().toISOString().split('T')[0];
+      return json(200, await repository.getDoctorQueue(doctorIdParam, date));
+    }
+
+    // 2. GET /doctors/me/appointments
+    if (path.includes('/doctors/me/appointments')) {
+      requireDoctorRole(event);
+      const doctorId = doctorIdFromEvent(event);
+      const date = event.queryStringParameters?.date;
+      return json(200, { items: await repository.listByDoctor(doctorId, date) });
+    }
+
+    // 3. PATCH /appointments/{id}/status (Doctor updates status, diagnosis, prescription)
+    if (method === 'PATCH' && (path.endsWith('/status') || event.pathParameters?.action === 'status')) {
+      requireDoctorRole(event);
+      const doctorId = doctorIdFromEvent(event);
+      const { status, note, diagnosis, prescription, followUpDate } = statusInput(parseJsonBody(event));
+      const updated = await repository.updateStatusByDoctor(
+        doctorId,
+        appointmentId,
+        status,
+        note,
+        diagnosis,
+        prescription,
+        followUpDate,
+      );
+      return updated
+        ? json(200, updated)
+        : error(404, 'Không tìm thấy lịch khám hoặc bạn không có quyền cập nhật.');
+    }
+
+    // 3b. PATCH /appointments/{id}/rating (Patient rates completed appointment)
+    if (method === 'PATCH' && (path.endsWith('/rating') || event.pathParameters?.action === 'rating')) {
+      requirePatientRole(event);
+      const patientId = patientIdFromEvent(event);
+      const { rating, reviewNote } = ratingInput(parseJsonBody(event));
+      const updated = await repository.rateAppointmentByPatient(
+        patientId,
+        appointmentId,
+        rating,
+        reviewNote,
+      );
+      return updated
+        ? json(200, updated)
+        : error(404, 'Không tìm thấy lịch khám hoặc bạn không có quyền đánh giá.');
+    }
+
+    // 4. PATCH /appointments/{id}/cancel (Patient cancels appointment)
+    if (method === 'PATCH' && (path.endsWith('/cancel') || event.pathParameters?.action === 'cancel')) {
+      requirePatientRole(event);
+      const patientId = patientIdFromEvent(event);
+      const body = parseJsonBody(event);
+      const appointment = await repository.cancelForPatient(
+        patientId,
+        appointmentId,
+        body?.reason,
+      );
+      return appointment
+        ? json(200, appointment)
+        : error(404, 'Không tìm thấy lịch khám.');
+    }
+
+    // 4b. POST or PATCH /appointments/{id}/checkin (Reception / Kiosk check-in)
+    if ((method === 'POST' || method === 'PATCH') && (path.endsWith('/checkin') || event.pathParameters?.action === 'checkin')) {
+      const body = parseJsonBody(event);
+      const updated = await repository.checkinAppointment(appointmentId, {
+        roomNumber: body?.roomNumber,
+      });
+      return updated
+        ? json(200, updated)
+        : error(404, 'Không tìm thấy lịch khám.');
+    }
+
+    // 5. GET /appointments (Patient lists own appointments)
+    if (method === 'GET' && !appointmentId) {
+      requirePatientRole(event);
+      const patientId = patientIdFromEvent(event);
+      return json(200, { items: await repository.listByPatient(patientId) });
+    }
+
+    // 6. POST /appointments (Patient creates appointment)
+    if (method === 'POST') {
+      requirePatientRole(event);
+      const patientId = patientIdFromEvent(event);
+      const body = parseJsonBody(event);
+      const idempotencyKey =
+        event.headers?.['idempotency-key'] ||
+        event.headers?.['Idempotency-Key'] ||
+        body?.idempotencyKey;
+      return json(
+        201,
+        await repository.create(patientId, appointmentInput(body), idempotencyKey),
+      );
+    }
+
+    // 6b. GET /appointments/{id}/medical-record
+    if (method === 'GET' && appointmentId && (path.endsWith('/medical-record') || event.pathParameters?.action === 'medical-record')) {
+      const record = await repository.getMedicalRecord(appointmentId);
+      return record
+        ? json(200, record)
+        : error(404, 'Không tìm thấy hồ sơ bệnh án hoặc ca khám chưa hoàn tất.');
+    }
+
+    // 7. GET /appointments/{id} (Patient gets appointment detail)
+    if (method === 'GET' && appointmentId) {
+      requirePatientRole(event);
+      const patientId = patientIdFromEvent(event);
+      const appointment = await repository.getForPatient(patientId, appointmentId);
+      return appointment
+        ? json(200, appointment)
+        : error(404, 'Không tìm thấy lịch khám.');
+    }
+
+    return error(405, 'Phương thức không được hỗ trợ.');
+  });

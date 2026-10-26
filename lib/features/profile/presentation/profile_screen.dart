@@ -129,6 +129,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _field('Địa chỉ', p.address),
           _field('Người liên hệ khẩn cấp', p.emergencyContactName),
           _field('Số điện thoại liên hệ khẩn cấp', p.emergencyContactPhone),
+          const SizedBox(height: 20),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.red,
+              side: const BorderSide(color: Color(0xFFFFD9D9)),
+            ),
+            onPressed: () async {
+              await authRepository.signOut();
+              if (!context.mounted) return;
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (_) => false,
+              );
+            },
+            icon: const Icon(Icons.logout),
+            label: const Text('Đăng xuất'),
+          ),
         ],
       ),
     );
