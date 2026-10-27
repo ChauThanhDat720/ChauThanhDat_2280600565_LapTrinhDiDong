@@ -134,15 +134,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                         : AppColors.mutedText,
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    'Bệnh nhân',
-                                    style: TextStyle(
-                                      fontWeight: !_isDoctorMode
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                      color: !_isDoctorMode
-                                          ? AppColors.primary
-                                          : AppColors.mutedText,
+                                  Flexible(
+                                    child: Text(
+                                      'Bệnh nhân',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontWeight: !_isDoctorMode
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                        color: !_isDoctorMode
+                                            ? AppColors.primary
+                                            : AppColors.mutedText,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -188,15 +192,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                         : AppColors.mutedText,
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    'Cán bộ Y tế / Bác sĩ',
-                                    style: TextStyle(
-                                      fontWeight: _isDoctorMode
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                      color: _isDoctorMode
-                                          ? const Color(0xFF0D9488)
-                                          : AppColors.mutedText,
+                                  Flexible(
+                                    child: Text(
+                                      'Bác sĩ / Y tế',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontWeight: _isDoctorMode
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                        color: _isDoctorMode
+                                            ? const Color(0xFF0D9488)
+                                            : AppColors.mutedText,
+                                      ),
                                     ),
                                   ),
                                 ],

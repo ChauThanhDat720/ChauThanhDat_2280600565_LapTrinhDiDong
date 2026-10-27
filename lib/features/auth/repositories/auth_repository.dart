@@ -65,7 +65,7 @@ class LocalAuthRepository implements AuthRepository {
     String? demoName,
   }) async {
     await PatientSession.instance.signIn(
-      name: demoName ?? email.split('@').first,
+      name: (demoName != null && demoName.trim().isNotEmpty) ? demoName.trim() : email.split('@').first,
       email: email,
     );
     return _user();
