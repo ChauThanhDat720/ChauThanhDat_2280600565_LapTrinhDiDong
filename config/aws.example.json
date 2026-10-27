@@ -1,0 +1,8 @@
+{
+  "BACKEND_MODE": "aws",
+  "AWS_REGION": "ap-southeast-1",
+  "API_BASE_URL": "https://REPLACE_ME.execute-api.ap-southeast-1.amazonaws.com/v1",
+  "COGNITO_USER_POOL_ID": "ap-southeast-1_REPLACE_ME",
+  "COGNITO_APP_CLIENT_ID": "REPLACE_ME",
+  "API_TIMEOUT_SECONDS": "20"
+}

@@ -51,3 +51,9 @@ app.*.map.json
 **/node_modules/
 backend/data/*.db*
 .tmp/
+
+# Local AWS metadata and SAM build output (credentials stay in AWS CLI/SSO).
+config/aws.local.json
+config/aws.outputs.json
+backend/.aws-sam/
+releases/*.apk

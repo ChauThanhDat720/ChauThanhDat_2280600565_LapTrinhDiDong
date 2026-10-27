@@ -1,3 +1,5 @@
+import '../../../core/repositories/application_backend.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -16,12 +18,12 @@ import '../../reminders/presentation/medication_reminder_screen.dart';
 import 'lab_results_detail_screen.dart';
 
 class MedicalRecordsScreen extends StatefulWidget {
-  const MedicalRecordsScreen({
-    super.key,
-    this.repository = const LocalAppointmentRepository(),
-  });
+  const MedicalRecordsScreen({super.key, AppointmentRepository? repository})
+    : _providedRepository = repository;
 
-  final AppointmentRepository repository;
+  final AppointmentRepository? _providedRepository;
+  AppointmentRepository get repository =>
+      _providedRepository ?? ApplicationBackend.repositories.appointments;
 
   @override
   State<MedicalRecordsScreen> createState() => _MedicalRecordsScreenState();
@@ -73,7 +75,10 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
       final diag = (item.diagnosis ?? '').toLowerCase();
       final pres = (item.prescription ?? '').toLowerCase();
       final dept = item.department.toLowerCase();
-      return doc.contains(q) || diag.contains(q) || pres.contains(q) || dept.contains(q);
+      return doc.contains(q) ||
+          diag.contains(q) ||
+          pres.contains(q) ||
+          dept.contains(q);
     }).toList();
   }
 
@@ -96,7 +101,10 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
     }
   }
 
-  Future<void> _createRemindersFromPrescription(BuildContext context, Appointment item) async {
+  Future<void> _createRemindersFromPrescription(
+    BuildContext context,
+    Appointment item,
+  ) async {
     if (item.prescription == null || item.prescription!.trim().isEmpty) return;
     try {
       const repo = RemoteMedicationReminderRepository();
@@ -109,7 +117,9 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFF0D9488),
-          content: Text('Đã tạo thành công ${reminders.length} lời nhắc uống thuốc!'),
+          content: Text(
+            'Đã tạo thành công ${reminders.length} lời nhắc uống thuốc!',
+          ),
           action: SnackBarAction(
             label: 'Xem lịch',
             textColor: Colors.white,
@@ -128,7 +138,10 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: Colors.red, content: Text('Lỗi tạo lịch nhắc: $e')),
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Lỗi tạo lịch nhắc: $e'),
+        ),
       );
     }
   }
@@ -187,46 +200,46 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : list.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.receipt_long_outlined,
-                                size: 64,
-                                color: AppColors.mutedText.withValues(alpha: 0.4),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                _searchQuery.isEmpty
-                                    ? 'Chưa có hồ sơ bệnh án nào'
-                                    : 'Không tìm thấy kết quả phù hợp',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.mutedText,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              const Text(
-                                'Các ca khám đã hoàn thành sẽ được lưu trữ tại đây.',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.mutedText,
-                                ),
-                              ),
-                            ],
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.receipt_long_outlined,
+                            size: 64,
+                            color: AppColors.mutedText.withValues(alpha: 0.4),
                           ),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                          itemCount: list.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 14),
-                          itemBuilder: (context, index) {
-                            final item = list[index];
-                            return _buildRecordCard(item);
-                          },
-                        ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _searchQuery.isEmpty
+                                ? 'Chưa có hồ sơ bệnh án nào'
+                                : 'Không tìm thấy kết quả phù hợp',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.mutedText,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Các ca khám đã hoàn thành sẽ được lưu trữ tại đây.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.mutedText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                      itemCount: list.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 14),
+                      itemBuilder: (context, index) {
+                        final item = list[index];
+                        return _buildRecordCard(item);
+                      },
+                    ),
             ),
           ],
         ),
@@ -237,8 +250,7 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
   Widget _buildRecordCard(Appointment item) {
     final hasPrescription =
         item.prescription != null && item.prescription!.isNotEmpty;
-    final hasDiagnosis =
-        item.diagnosis != null && item.diagnosis!.isNotEmpty;
+    final hasDiagnosis = item.diagnosis != null && item.diagnosis!.isNotEmpty;
     final isRated = item.rating != null && item.rating! > 0;
 
     return Container(
@@ -293,7 +305,10 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.success.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
@@ -313,14 +328,15 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
           if (hasDiagnosis) ...[
             Row(
               children: const [
-                Icon(Icons.assignment_outlined, size: 16, color: AppColors.primary),
+                Icon(
+                  Icons.assignment_outlined,
+                  size: 16,
+                  color: AppColors.primary,
+                ),
                 SizedBox(width: 6),
                 Text(
                   'Chẩn đoán của bác sĩ:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
               ],
             ),
@@ -342,14 +358,15 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
           if (hasPrescription) ...[
             Row(
               children: [
-                const Icon(Icons.medication_outlined, size: 16, color: AppColors.success),
+                const Icon(
+                  Icons.medication_outlined,
+                  size: 16,
+                  color: AppColors.success,
+                ),
                 const SizedBox(width: 6),
                 const Text(
                   'Đơn thuốc & Hướng dẫn:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 const Spacer(),
                 IconButton(
@@ -391,10 +408,11 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
               spacing: 8,
               runSpacing: 6,
               children: [
-                for (final line in item.prescription!
-                    .split('\n')
-                    .map((l) => l.trim())
-                    .where((l) => l.isNotEmpty))
+                for (final line
+                    in item.prescription!
+                        .split('\n')
+                        .map((l) => l.trim())
+                        .where((l) => l.isNotEmpty))
                   ActionChip(
                     avatar: const Icon(
                       Icons.menu_book_rounded,
@@ -420,10 +438,13 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
             const SizedBox(height: 10),
             FilledButton.tonalIcon(
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF0D9488).withValues(alpha: 0.12),
+                backgroundColor: const Color(0xFF0D9488)
+                    .withValues(alpha: 0.12),
                 foregroundColor: const Color(0xFF0D9488),
                 minimumSize: const Size(double.infinity, 38),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               icon: const Icon(Icons.alarm_add_rounded, size: 18),
               label: const Text(
@@ -437,7 +458,11 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
           if (item.statusNote != null && item.statusNote!.isNotEmpty) ...[
             Row(
               children: const [
-                Icon(Icons.tips_and_updates_outlined, size: 16, color: Colors.orange),
+                Icon(
+                  Icons.tips_and_updates_outlined,
+                  size: 16,
+                  color: Colors.orange,
+                ),
                 SizedBox(width: 6),
                 Text(
                   'Lời dặn của bác sĩ:',
@@ -457,7 +482,9 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isRated ? Colors.amber.withValues(alpha: 0.08) : AppColors.background,
+              color: isRated
+                  ? Colors.amber.withValues(alpha: 0.08)
+                  : AppColors.background,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
@@ -489,12 +516,19 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
                     ),
                   ),
                 ] else ...[
-                  const Icon(Icons.star_outline_rounded, color: Colors.amber, size: 22),
+                  const Icon(
+                    Icons.star_outline_rounded,
+                    color: Colors.amber,
+                    size: 22,
+                  ),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
                       'Bạn chưa đánh giá buổi khám này',
-                      style: TextStyle(fontSize: 12, color: AppColors.mutedText),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.mutedText,
+                      ),
                     ),
                   ),
                   TextButton(
@@ -527,7 +561,11 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 10),
               ),
-              icon: const Icon(Icons.biotech_rounded, size: 20, color: Color(0xFF0284C7)),
+              icon: const Icon(
+                Icons.biotech_rounded,
+                size: 20,
+                color: Color(0xFF0284C7),
+              ),
               label: const Text(
                 'Xem Kết quả Xét nghiệm & CĐHA',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
@@ -556,7 +594,8 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => MedicalRecordPdfPreviewScreen(appointment: item),
+                        builder: (_) =>
+                            MedicalRecordPdfPreviewScreen(appointment: item),
                       ),
                     );
                   },

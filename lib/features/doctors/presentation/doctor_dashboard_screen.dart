@@ -1,5 +1,7 @@
+import '../../../core/repositories/application_backend.dart';
 import '../../notifications/data/notification_store.dart';
 import '../../notifications/domain/notification_item.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -23,13 +25,15 @@ import '../domain/doctor.dart';
 class DoctorDashboardScreen extends StatefulWidget {
   const DoctorDashboardScreen({
     super.key,
-    this.repository = const LocalAppointmentRepository(),
+    AppointmentRepository? repository,
     this.doctorId = 'dr-linh',
     this.doctorName = 'BS. Trần Thảo Linh',
     this.department = 'Khoa Tim mạch',
-  });
+  }) : _providedRepository = repository;
 
-  final AppointmentRepository repository;
+  final AppointmentRepository? _providedRepository;
+  AppointmentRepository get repository =>
+      _providedRepository ?? ApplicationBackend.repositories.appointments;
   final String doctorId;
   final String doctorName;
   final String department;
@@ -130,6 +134,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   }
 
   void _showDoctorPicker() {
+    if (widget.repository is RemoteAppointmentRepository) return;
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -143,13 +148,15 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  const Icon(Icons.people_alt_outlined, color: AppColors.primary),
+                  const Icon(
+                    Icons.people_alt_outlined,
+                    color: AppColors.primary,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Chọn Bác sĩ làm việc',
-                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: Theme.of(ctx).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const Spacer(),
                   IconButton(
@@ -165,8 +172,13 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                 backgroundColor: AppColors.primary,
                 child: Icon(Icons.domain, color: Colors.white, size: 20),
               ),
-              title: const Text('Toàn viện (Xem tất cả bác sĩ)', style: TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: const Text('Hiển thị lịch khám của tất cả các chuyên khoa'),
+              title: const Text(
+                'Toàn viện (Xem tất cả bác sĩ)',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text(
+                'Hiển thị lịch khám của tất cả các chuyên khoa',
+              ),
               selected: _selectedDoctorId == 'all',
               onTap: () {
                 Navigator.pop(ctx);
@@ -191,12 +203,27 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                       backgroundColor: doc.color,
                       child: Text(
                         doc.name.replaceFirst('BS. ', '').substring(0, 1),
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
                       ),
                     ),
-                    title: Text(doc.name, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                    title: Text(
+                      doc.name,
+                      style: TextStyle(
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                    ),
                     subtitle: Text('${doc.department} • ${doc.specialty}'),
-                    trailing: isSelected ? const Icon(Icons.check_circle, color: AppColors.primary) : null,
+                    trailing: isSelected
+                        ? const Icon(
+                            Icons.check_circle,
+                            color: AppColors.primary,
+                          )
+                        : null,
                     onTap: () {
                       Navigator.pop(ctx);
                       setState(() {
@@ -245,7 +272,9 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi: ${e.toString().replaceAll('Bad state: ', '')}')),
+          SnackBar(
+            content: Text('Lỗi: ${e.toString().replaceAll('Bad state: ', '')}'),
+          ),
         );
       }
     }
@@ -256,7 +285,9 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Đăng xuất'),
-        content: const Text('Bạn có chắc chắn muốn đăng xuất khỏi tài khoản bác sĩ?'),
+        content: const Text(
+          'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản bác sĩ?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -285,14 +316,18 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
         ? _appointments
         : _appointments.where((a) => a.status == _filterStatus).toList();
 
-    final pendingCount =
-        _appointments.where((a) => a.status == AppointmentStatus.pending).length;
-    final confirmedCount =
-        _appointments.where((a) => a.status == AppointmentStatus.confirmed).length;
-    final checkedInCount =
-        _appointments.where((a) => a.status == AppointmentStatus.checkedIn).length;
-    final completedCount =
-        _appointments.where((a) => a.status == AppointmentStatus.completed).length;
+    final pendingCount = _appointments
+        .where((a) => a.status == AppointmentStatus.pending)
+        .length;
+    final confirmedCount = _appointments
+        .where((a) => a.status == AppointmentStatus.confirmed)
+        .length;
+    final checkedInCount = _appointments
+        .where((a) => a.status == AppointmentStatus.checkedIn)
+        .length;
+    final completedCount = _appointments
+        .where((a) => a.status == AppointmentStatus.completed)
+        .length;
 
     return Scaffold(
       appBar: AppBar(
@@ -301,7 +336,9 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
           IconButton(
             icon: const Icon(Icons.people_alt_outlined),
             tooltip: 'Chọn Bác sĩ làm việc',
-            onPressed: _showDoctorPicker,
+            onPressed: widget.repository is RemoteAppointmentRepository
+                ? null
+                : _showDoctorPicker,
           ),
           IconButton(
             icon: const Icon(Icons.account_balance_wallet_rounded),
@@ -404,7 +441,11 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                                 ),
                               ),
                               InkWell(
-                                onTap: _showDoctorPicker,
+                                onTap:
+                                    widget.repository
+                                        is RemoteAppointmentRepository
+                                    ? null
+                                    : _showDoctorPicker,
                                 borderRadius: BorderRadius.circular(6),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
@@ -481,9 +522,15 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: const Color(0xFF0D9488).withValues(alpha: 0.3),
+                  ),
                   boxShadow: const [
-                    BoxShadow(color: Color(0x0C000000), blurRadius: 8, offset: Offset(0, 2)),
+                    BoxShadow(
+                      color: Color(0x0C000000),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
                   ],
                 ),
                 child: Column(
@@ -492,97 +539,151 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFF0D9488),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(
                             'PHÒNG KHÁM 204 • CA SÁNG',
-                            style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         const Spacer(),
-                        const Icon(Icons.campaign_rounded, color: Color(0xFF0D9488), size: 20),
+                        const Icon(
+                          Icons.campaign_rounded,
+                          color: Color(0xFF0D9488),
+                          size: 20,
+                        ),
                         const SizedBox(width: 4),
                         const Text(
                           'Hàng đợi tiếp đón trực tiếp',
-                          style: TextStyle(color: Color(0xFF0D9488), fontSize: 12, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            color: Color(0xFF0D9488),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
                     const Divider(height: 20),
                     if (checkedInCount > 0) ...[
-                      Builder(builder: (ctx) {
-                        final nextPatient = _appointments.firstWhere((a) => a.status == AppointmentStatus.checkedIn);
-                        return Row(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: const Color(0xFF0D9488).withValues(alpha: 0.1),
-                              child: Text(
-                                nextPatient.queueNumber != null ? '${nextPatient.queueNumber}'.padLeft(2, '0') : '01',
-                                style: const TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'STT ${nextPatient.queueNumber ?? 1}: ${nextPatient.patientName}',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      Builder(
+                        builder: (ctx) {
+                          final nextPatient = _appointments.firstWhere(
+                            (a) => a.status == AppointmentStatus.checkedIn,
+                          );
+                          return Row(
+                            children: [
+                              CircleAvatar(
+                                backgroundColor: const Color(0xFF0D9488)
+                                    .withValues(alpha: 0.1),
+                                child: Text(
+                                  nextPatient.queueNumber != null
+                                      ? '${nextPatient.queueNumber}'.padLeft(
+                                          2,
+                                          '0',
+                                        )
+                                      : '01',
+                                  style: const TextStyle(
+                                    color: Color(0xFF0D9488),
+                                    fontWeight: FontWeight.bold,
                                   ),
-                                  Text(
-                                    'Đang đợi ngoài sảnh • Giờ khám: ${nextPatient.time}',
-                                    style: const TextStyle(color: AppColors.mutedText, fontSize: 12),
-                                  ),
-                                ],
+                                ),
                               ),
-                            ),
-                            FilledButton.icon(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF0D9488),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              ),
-                              icon: const Icon(Icons.volume_up_rounded, size: 18),
-                              label: const Text('Gọi vào khám'),
-                              onPressed: () async {
-                                NotificationStore.instance.addNotification(
-                                  title: 'Mời vào phòng khám',
-                                  body: 'Mời bệnh nhân ${nextPatient.patientName} (STT: ${nextPatient.queueNumber?.toString().padLeft(2, '0') ?? '01'}) vào Phòng 204 gặp BS. Trần Thảo Linh.',
-                                  type: NotificationType.appointment,
-                                  referenceId: nextPatient.id,
-                                );
-
-                                final updated = await Navigator.of(context).push<Appointment>(
-                                  MaterialPageRoute(
-                                    builder: (_) => DoctorExaminationScreen(
-                                      appointment: nextPatient,
-                                      repository: widget.repository,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'STT ${nextPatient.queueNumber ?? 1}: ${nextPatient.patientName}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
                                     ),
+                                    Text(
+                                      'Đang đợi ngoài sảnh • Giờ khám: ${nextPatient.time}',
+                                      style: const TextStyle(
+                                        color: AppColors.mutedText,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              FilledButton.icon(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0D9488),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
                                   ),
-                                );
-                                if (updated != null && mounted) {
-                                  setState(() {
-                                    final idx = _appointments.indexWhere((a) => a.id == updated.id);
-                                    if (idx >= 0) _appointments[idx] = updated;
-                                  });
-                                }
-                              },
-                            ),
-                          ],
-                        );
-                      }),
+                                ),
+                                icon: const Icon(
+                                  Icons.volume_up_rounded,
+                                  size: 18,
+                                ),
+                                label: const Text('Gọi vào khám'),
+                                onPressed: () async {
+                                  NotificationStore.instance.addNotification(
+                                    title: 'Mời vào phòng khám',
+                                    body:
+                                        'Mời bệnh nhân ${nextPatient.patientName} (STT: ${nextPatient.queueNumber?.toString().padLeft(2, '0') ?? '01'}) vào Phòng 204 gặp BS. Trần Thảo Linh.',
+                                    type: NotificationType.appointment,
+                                    referenceId: nextPatient.id,
+                                  );
+
+                                  final updated = await Navigator.of(context)
+                                      .push<Appointment>(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              DoctorExaminationScreen(
+                                                appointment: nextPatient,
+                                                repository: widget.repository,
+                                              ),
+                                        ),
+                                      );
+                                  if (updated != null && mounted) {
+                                    setState(() {
+                                      final idx = _appointments.indexWhere(
+                                        (a) => a.id == updated.id,
+                                      );
+                                      if (idx >= 0) {
+                                        _appointments[idx] = updated;
+                                      }
+                                    });
+                                  }
+                                },
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                     ] else ...[
                       const Row(
                         children: [
-                          Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                          Icon(
+                            Icons.check_circle_outline,
+                            color: Colors.green,
+                            size: 20,
+                          ),
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'Chưa có bệnh nhân đợi ngoài sảnh. Hệ thống sẵn sàng nhận ca tiếp theo.',
-                              style: TextStyle(color: AppColors.mutedText, fontSize: 13),
+                              style: TextStyle(
+                                color: AppColors.mutedText,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ],
@@ -676,38 +777,34 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     required int count,
     required Color color,
     required IconData icon,
-  }) =>
-      Expanded(
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+  }) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 6),
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
           ),
-          child: Column(
-            children: [
-              Icon(icon, color: color, size: 24),
-              const SizedBox(height: 6),
-              Text(
-                '$count',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: color,
-                ),
-              ),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.mutedText,
-                ),
-              ),
-            ],
+          Text(
+            title,
+            style: const TextStyle(fontSize: 12, color: AppColors.mutedText),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 
   Widget _filterChip(AppointmentStatus? status, String label) {
     final selected = _filterStatus == status;
@@ -788,17 +885,24 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                           const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFFEF3C7),
                               borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: const Color(0xFFFCD34D)),
+                              border: Border.all(
+                                color: const Color(0xFFFCD34D),
+                              ),
                             ),
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.event_repeat_rounded,
-                                    size: 11, color: Color(0xFFD97706)),
+                                Icon(
+                                  Icons.event_repeat_rounded,
+                                  size: 11,
+                                  color: Color(0xFFD97706),
+                                ),
                                 SizedBox(width: 3),
                                 Text(
                                   'TÁI KHÁM',
@@ -825,7 +929,10 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
@@ -850,7 +957,11 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.access_time, size: 16, color: AppColors.primary),
+                const Icon(
+                  Icons.access_time,
+                  size: 16,
+                  color: AppColors.primary,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   '${item.time} • ${AppTimezone.date(item.date)}',
@@ -862,7 +973,10 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                 if (item.queueNumber != null) ...[
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF0D9488),
                       borderRadius: BorderRadius.circular(6),
@@ -905,10 +1019,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                       color: AppColors.success,
                     ),
                   ),
-                  Text(
-                    item.diagnosis!,
-                    style: const TextStyle(fontSize: 13),
-                  ),
+                  Text(item.diagnosis!, style: const TextStyle(fontSize: 13)),
                 ],
               ),
             ),
@@ -926,52 +1037,79 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => HealthVitalsScreen(
-                        patientId: item.patientId.isNotEmpty ? item.patientId : 'patient-1',
+                        patientId: item.patientId.isNotEmpty
+                            ? item.patientId
+                            : 'patient-1',
                         isDoctorView: true,
                       ),
                     ),
                   );
                 },
-                icon: const Icon(Icons.monitor_heart_outlined, size: 16, color: Color(0xFF0D9488)),
-                label: const Text('Sinh hiệu', style: TextStyle(color: Color(0xFF0D9488), fontSize: 12)),
+                icon: const Icon(
+                  Icons.monitor_heart_outlined,
+                  size: 16,
+                  color: Color(0xFF0D9488),
+                ),
+                label: const Text(
+                  'Sinh hiệu',
+                  style: TextStyle(color: Color(0xFF0D9488), fontSize: 12),
+                ),
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: Color(0xFF0D9488)),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
                 ),
               ),
               if (item.status == AppointmentStatus.pending) ...[
                 OutlinedButton(
-                  onPressed: () => _updateStatus(item, AppointmentStatus.cancelled, note: 'Bác sĩ bận việc đột xuất'),
+                  onPressed: () => _updateStatus(
+                    item,
+                    AppointmentStatus.cancelled,
+                    note: 'Bác sĩ bận việc đột xuất',
+                  ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.red,
                     side: const BorderSide(color: Colors.red),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                   ),
                   child: const Text('Từ chối'),
                 ),
                 FilledButton.icon(
-                  onPressed: () => _updateStatus(item, AppointmentStatus.confirmed),
+                  onPressed: () =>
+                      _updateStatus(item, AppointmentStatus.confirmed),
                   icon: const Icon(Icons.check, size: 18),
                   label: const Text('Xác nhận lịch'),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                   ),
                 ),
-              ] else if (item.status == AppointmentStatus.confirmed || item.status == AppointmentStatus.checkedIn) ...[
+              ] else if (item.status == AppointmentStatus.confirmed ||
+                  item.status == AppointmentStatus.checkedIn) ...[
                 FilledButton.icon(
                   onPressed: () async {
-                    final updated = await Navigator.of(context).push<Appointment>(
-                      MaterialPageRoute(
-                        builder: (_) => DoctorExaminationScreen(
-                          appointment: item,
-                          repository: widget.repository,
-                        ),
-                      ),
-                    );
+                    final updated = await Navigator.of(context)
+                        .push<Appointment>(
+                          MaterialPageRoute(
+                            builder: (_) => DoctorExaminationScreen(
+                              appointment: item,
+                              repository: widget.repository,
+                            ),
+                          ),
+                        );
                     if (updated != null && mounted) {
                       setState(() {
-                        final idx = _appointments.indexWhere((a) => a.id == updated.id);
+                        final idx = _appointments.indexWhere(
+                          (a) => a.id == updated.id,
+                        );
                         if (idx >= 0) _appointments[idx] = updated;
                       });
                     }
@@ -980,7 +1118,10 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                   label: const Text('Tiến hành khám'),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.success,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                   ),
                 ),
               ] else if (item.status == AppointmentStatus.completed) ...[
@@ -988,14 +1129,18 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => DoctorExaminationDetailScreen(appointment: item),
+                        builder: (_) =>
+                            DoctorExaminationDetailScreen(appointment: item),
                       ),
                     );
                   },
                   icon: const Icon(Icons.description_outlined, size: 18),
                   label: const Text('Xem bệnh án & đơn thuốc'),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                   ),
                 ),
                 FilledButton.tonalIcon(
@@ -1014,7 +1159,10 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                   icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
                   label: const Text('Tư vấn hậu khám'),
                   style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                   ),
                 ),
               ],
@@ -1037,7 +1185,8 @@ class DoctorExaminationScreen extends StatefulWidget {
   final AppointmentRepository repository;
 
   @override
-  State<DoctorExaminationScreen> createState() => _DoctorExaminationScreenState();
+  State<DoctorExaminationScreen> createState() =>
+      _DoctorExaminationScreenState();
 }
 
 class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
@@ -1060,7 +1209,8 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
     super.initState();
     _prescriptionController.addListener(() {
       final text = _prescriptionController.text.toLowerCase();
-      final hasRisk = text.contains('penicillin') ||
+      final hasRisk =
+          text.contains('penicillin') ||
           text.contains('amoxicillin') ||
           text.contains('augmentin');
       if (hasRisk != _hasAllergyRisk) {
@@ -1096,7 +1246,10 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  const Icon(Icons.medication_rounded, color: AppColors.primary),
+                  const Icon(
+                    Icons.medication_rounded,
+                    color: AppColors.primary,
+                  ),
                   const SizedBox(width: 8),
                   const Text(
                     'Chọn thuốc từ Danh mục Bệnh viện',
@@ -1119,15 +1272,25 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
                 itemBuilder: (_, index) {
                   final m = meds[index];
                   return ListTile(
-                    title: Text(m.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('${m.activeIngredient} • ${m.dosageInstructions}'),
+                    title: Text(
+                      m.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      '${m.activeIngredient} • ${m.dosageInstructions}',
+                    ),
                     trailing: FilledButton.tonal(
                       child: const Text('Kê đơn'),
                       onPressed: () {
                         final current = _prescriptionController.text.trim();
-                        final count = current.isEmpty ? 1 : '\n'.allMatches(current).length + 2;
-                        final line = '$count. ${m.name} (${m.activeIngredient}) - ${m.dosageInstructions.split('.').first}';
-                        _prescriptionController.text = current.isEmpty ? line : '$current\n$line';
+                        final count = current.isEmpty
+                            ? 1
+                            : '\n'.allMatches(current).length + 2;
+                        final line =
+                            '$count. ${m.name} (${m.activeIngredient}) - ${m.dosageInstructions.split('.').first}';
+                        _prescriptionController.text = current.isEmpty
+                            ? line
+                            : '$current\n$line';
                         Navigator.pop(ctx);
                       },
                     ),
@@ -1155,13 +1318,15 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
     try {
       String advice = _adviceController.text.trim();
       if (_selectedFollowUpDate != null) {
-        final fText = 'Hẹn tái khám ngày ${AppTimezone.date(_selectedFollowUpDate!)}';
+        final fText =
+            'Hẹn tái khám ngày ${AppTimezone.date(_selectedFollowUpDate!)}';
         if (!advice.contains(fText)) {
           advice = advice.isEmpty ? fText : '$advice\n• $fText';
         }
       }
       if (_labOrdered && _selectedLabs.isNotEmpty) {
-        final labStr = 'Kết quả CLS: ${_selectedLabs.join(", ")} (Chỉ số sinh hóa & huyết học trong giới hạn bình thường).';
+        final labStr =
+            'Kết quả CLS: ${_selectedLabs.join(", ")} (Chỉ số sinh hóa & huyết học trong giới hạn bình thường).';
         advice = advice.isEmpty ? labStr : '$advice\n• $labStr';
       }
 
@@ -1179,7 +1344,8 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
           : '';
       NotificationStore.instance.addNotification(
         title: 'Đã có kết quả khám & Đơn thuốc',
-        body: 'BS. Trần Thảo Linh đã hoàn tất ca khám cho ${widget.appointment.patientName}.$fNote Vui lòng kiểm tra đơn thuốc và làm thủ tục thanh toán viện phí.',
+        body:
+            'BS. Trần Thảo Linh đã hoàn tất ca khám cho ${widget.appointment.patientName}.$fNote Vui lòng kiểm tra đơn thuốc và làm thủ tục thanh toán viện phí.',
         type: NotificationType.prescription,
         referenceId: widget.appointment.id,
       );
@@ -1193,7 +1359,9 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi: ${e.toString().replaceAll('Bad state: ', '')}')),
+          SnackBar(
+            content: Text('Lỗi: ${e.toString().replaceAll('Bad state: ', '')}'),
+          ),
         );
       }
     } finally {
@@ -1203,193 +1371,245 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Khám & Kê đơn thuốc')),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(18),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Patient Summary Card with Allergy Alert & Vitals
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+    appBar: AppBar(title: const Text('Khám & Kê đơn thuốc')),
+    body: SingleChildScrollView(
+      padding: const EdgeInsets.all(18),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Patient Summary Card with Allergy Alert & Vitals
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.person, color: AppColors.primary),
-                          const SizedBox(width: 8),
-                          Text(
-                            widget.appointment.patientName,
-                            style: const TextStyle(
-                              fontSize: 16,
+                      const Icon(Icons.person, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        widget.appointment.patientName,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        'Lịch: ${widget.appointment.time}',
+                        style: const TextStyle(
+                          color: AppColors.mutedText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 16),
+                  Text(
+                    'Triệu chứng / Lý do: ${widget.appointment.reason}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 12),
+                  // Red Allergy Alert Banner
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.red.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.red,
+                          size: 20,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'CẢNH BÁO TIỀN SỬ DỊ ỨNG: Dị ứng Penicillin, Amoxicillin (Khó thở, phát ban cấp).',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 12.5,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const Spacer(),
-                          Text(
-                            'Lịch: ${widget.appointment.time}',
-                            style: const TextStyle(
-                              color: AppColors.mutedText,
-                              fontWeight: FontWeight.w600,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (widget.appointment.isFollowUp ||
+                      widget.appointment.parentAppointmentId != null) ...[
+                    const SizedBox(height: 10),
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => LabResultsDetailScreen(
+                              appointmentId:
+                                  widget.appointment.parentAppointmentId ??
+                                  widget.appointment.id,
                             ),
                           ),
-                        ],
-                      ),
-                      const Divider(height: 16),
-                      Text(
-                        'Triệu chứng / Lý do: ${widget.appointment.reason}',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      const SizedBox(height: 12),
-                      // Red Allergy Alert Banner
-                      Container(
-                        padding: const EdgeInsets.all(10),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.08),
+                          color: const Color(0xFFEFF6FF),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                          border: Border.all(color: const Color(0xFF93C5FD)),
                         ),
                         child: const Row(
                           children: [
-                            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
+                            Icon(
+                              Icons.event_repeat_rounded,
+                              color: Color(0xFF2563EB),
+                              size: 20,
+                            ),
                             SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'CẢNH BÁO TIỀN SỬ DỊ ỨNG: Dị ứng Penicillin, Amoxicillin (Khó thở, phát ban cấp).',
+                                'CA TÁI KHÁM THEO CHỈ ĐỊNH: Chạm để xem Bệnh án & Kết quả Xét nghiệm đợt trước',
                                 style: TextStyle(
-                                  color: Colors.red,
+                                  color: Color(0xFF1D4ED8),
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
+                            Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 14,
+                              color: Color(0xFF2563EB),
+                            ),
                           ],
                         ),
                       ),
-                      if (widget.appointment.isFollowUp ||
-                          widget.appointment.parentAppointmentId != null) ...[
-                        const SizedBox(height: 10),
-                        InkWell(
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => LabResultsDetailScreen(
-                                  appointmentId: widget.appointment.parentAppointmentId ??
-                                      widget.appointment.id,
-                                ),
-                              ),
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEFF6FF),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF93C5FD)),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(Icons.event_repeat_rounded,
-                                    color: Color(0xFF2563EB), size: 20),
-                                SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'CA TÁI KHÁM THEO CHỈ ĐỊNH: Chạm để xem Bệnh án & Kết quả Xét nghiệm đợt trước',
-                                    style: TextStyle(
-                                      color: Color(0xFF1D4ED8),
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                Icon(Icons.arrow_forward_ios_rounded,
-                                    size: 14, color: Color(0xFF2563EB)),
-                              ],
-                            ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  // Triage Vitals Row
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        Text(
+                          'Huyết áp: 138/88 mmHg',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text('•', style: TextStyle(color: Colors.grey)),
+                        Text(
+                          'Mạch: 78 bpm',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text('•', style: TextStyle(color: Colors.grey)),
+                        Text(
+                          'SpO2: 98%',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text('•', style: TextStyle(color: Colors.grey)),
+                        Text(
+                          'BMI: 23.5',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
-                      const SizedBox(height: 10),
-                      // Triage Vitals Row
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            Text('Huyết áp: 138/88 mmHg', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                            Text('•', style: TextStyle(color: Colors.grey)),
-                            Text('Mạch: 78 bpm', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                            Text('•', style: TextStyle(color: Colors.grey)),
-                            Text('SpO2: 98%', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                            Text('•', style: TextStyle(color: Colors.grey)),
-                            Text('BMI: 23.5', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                          ],
-                        ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
+                        visualDensity: VisualDensity.compact,
                       ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.primary,
-                            side: const BorderSide(color: AppColors.primary),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          icon: const Icon(Icons.history_edu_rounded, size: 18),
-                          label: const Text('Xem lịch sử khám & đơn thuốc cũ của bệnh nhân'),
-                          onPressed: () => _showPatientMedicalHistoryModal(context),
-                        ),
+                      icon: const Icon(Icons.history_edu_rounded, size: 18),
+                      label: const Text(
+                        'Xem lịch sử khám & đơn thuốc cũ của bệnh nhân',
                       ),
+                      onPressed: () => _showPatientMedicalHistoryModal(context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            // Pre-visit Clinical Intake Summary for Doctor Review
+            Builder(
+              builder: (context) {
+                final intake = ClinicalIntakeStore.instance.getByAppointmentId(
+                  widget.appointment.id,
+                );
+                if (intake != null) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      IntakeSummaryCard(intake: intake, isDoctorView: true),
+                      const SizedBox(height: 18),
                     ],
-                  ),
-                ),
-                const SizedBox(height: 18),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
 
-                // Pre-visit Clinical Intake Summary for Doctor Review
-                Builder(
-                  builder: (context) {
-                    final intake = ClinicalIntakeStore.instance.getByAppointmentId(widget.appointment.id);
-                    if (intake != null) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          IntakeSummaryCard(intake: intake, isDoctorView: true),
-                          const SizedBox(height: 18),
-                        ],
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
+            // Paraclinical Diagnostic Orders Section
+            SectionTitle(
+              title: 'Chỉ định Cận lâm sàng (CLS)',
+              action: TextButton.icon(
+                icon: Icon(
+                  _labOrdered ? Icons.check_circle : Icons.science_outlined,
+                  size: 16,
                 ),
-
-                // Paraclinical Diagnostic Orders Section
-                SectionTitle(
-                  title: 'Chỉ định Cận lâm sàng (CLS)',
-                  action: TextButton.icon(
-                    icon: Icon(_labOrdered ? Icons.check_circle : Icons.science_outlined, size: 16),
-                    label: Text(_labOrdered ? 'Đã có kết quả' : 'Mô phỏng trả kết quả'),
-                    onPressed: () => setState(() => _labOrdered = true),
-                  ),
+                label: Text(
+                  _labOrdered ? 'Đã có kết quả' : 'Mô phỏng trả kết quả',
                 ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
+                onPressed: () => setState(() => _labOrdered = true),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children:
+                  [
                     'Tổng phân tích tế bào máu (CBC)',
                     'Điện tâm đồ ECG 12 chuyển đạo',
                     'Siêu âm tim Doppler màu',
@@ -1398,7 +1618,15 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
                   ].map((lab) {
                     final isSelected = _selectedLabs.contains(lab);
                     return FilterChip(
-                      label: Text(lab, style: TextStyle(fontSize: 12, color: isSelected ? AppColors.primary : AppColors.text)),
+                      label: Text(
+                        lab,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isSelected
+                              ? AppColors.primary
+                              : AppColors.text,
+                        ),
+                      ),
                       selected: isSelected,
                       selectedColor: AppColors.primary.withValues(alpha: 0.15),
                       onSelected: (val) {
@@ -1412,265 +1640,337 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
                       },
                     );
                   }).toList(),
+            ),
+            if (_labOrdered) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D9488).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xFF0D9488).withValues(alpha: 0.25),
+                  ),
                 ),
-                if (_labOrdered) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0D9488).withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.25)),
-                    ),
-                    child: const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Row(
-                          children: [
-                            Icon(Icons.assignment_turned_in_outlined, color: Color(0xFF0D9488), size: 18),
-                            SizedBox(width: 8),
-                            Text(
-                              'KẾT QUẢ CẬN LÂM SÀNG TỪ PHÒNG XÉT NGHIỆM & CĐHA:',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0D9488)),
-                            ),
-                          ],
+                        Icon(
+                          Icons.assignment_turned_in_outlined,
+                          color: Color(0xFF0D9488),
+                          size: 18,
                         ),
-                        SizedBox(height: 6),
-                        Text('• Điện tâm đồ ECG: Nhịp xoang đều 78ck/p, trục trung gian, không thiếu máu cơ tim cấp.', style: TextStyle(fontSize: 12.5)),
-                        Text('• Siêu âm tim: Buồng tim kích thước bình thường, EF 62%, hở van 2 lá sinh lý 1/4.', style: TextStyle(fontSize: 12.5)),
-                        Text('• Công thức máu: WBC 6.8 G/L, RBC 4.6 T/L, Hb 142 g/L (Bình thường).', style: TextStyle(fontSize: 12.5)),
-                        Text('• Sinh hóa máu: Glucose đói 5.3 mmol/L, Creatinine 76 umol/L (Chức năng thận tốt).', style: TextStyle(fontSize: 12.5)),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 20),
-
-                const SectionTitle(title: 'Mẫu kê nhanh (Templates)'),
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      ActionChip(
-                        avatar: const Icon(Icons.flash_on, size: 16, color: Colors.orange),
-                        label: const Text('Cảm cúm / Viêm họng'),
-                        onPressed: () => _applyTemplate(
-                          'Viêm đường hô hấp trên cấp tính, sốt nhẹ',
-                          '1. Paracetamol 500mg - 1 viên x 3 lần/ngày sau ăn khi sốt\n2. Vitamin C 500mg - 1 viên/ngày buổi sáng',
-                          'Uống nhiều nước ấm, súc họng nước muối. Tái khám sau 3 ngày nếu sốt không giảm.',
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ActionChip(
-                        avatar: const Icon(Icons.flash_on, size: 16, color: Colors.red),
-                        label: const Text('Tăng huyết áp'),
-                        onPressed: () => _applyTemplate(
-                          'Tăng huyết áp vô căn độ 1',
-                          '1. Amlodipine 5mg - 1 viên/ngày vào 8h sáng\n2. Aspirin 81mg - 1 viên/ngày sau ăn',
-                          'Ăn nhạt, hạn chế mỡ động vật, đo huyết áp mỗi sáng. Tái khám sau 1 tháng.',
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ActionChip(
-                        avatar: const Icon(Icons.flash_on, size: 16, color: Colors.green),
-                        label: const Text('Khám sức khỏe tốt'),
-                        onPressed: () => _applyTemplate(
-                          'Hiện tại chưa phát hiện bất thường, sức khỏe tốt',
-                          '1. Multivitamin tổng hợp - 1 viên/ngày sau ăn sáng',
-                          'Duy trì chế độ ăn lành mạnh và tập luyện 30 phút mỗi ngày.',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                const SectionTitle(title: 'Kết quả khám bệnh'),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _diagnosisController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Chẩn đoán bệnh *',
-                    hintText: 'Ví dụ: Viêm họng cấp / Huyết áp ổn định...',
-                    alignLabelWithHint: true,
-                  ),
-                  validator: (val) =>
-                      val == null || val.trim().isEmpty ? 'Vui lòng nhập chẩn đoán' : null,
-                ),
-                const SizedBox(height: 18),
-
-                SectionTitle(
-                  title: 'Đơn thuốc điện tử',
-                  action: TextButton.icon(
-                    onPressed: _showMedicineSelector,
-                    icon: const Icon(Icons.add_circle_outline, size: 16),
-                    label: const Text('Chọn từ kho dược'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _prescriptionController,
-                  maxLines: 5,
-                  decoration: const InputDecoration(
-                    labelText: 'Toa thuốc kê cho bệnh nhân',
-                    hintText:
-                        'Ví dụ:\n1. Paracetamol 500mg - 2 viên/ngày sau ăn\n2. Vitamin C 500mg - 1 viên/ngày',
-                    alignLabelWithHint: true,
-                  ),
-                ),
-                if (_hasAllergyRisk) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.report_problem_rounded, color: Colors.red, size: 20),
                         SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '🚨 CẢNH BÁO AN TOÀN DƯỢC LÂM SÀNG: Toa thuốc chứa hoạt chất dị ứng (Penicillin/Amoxicillin)! Vui lòng đổi thuốc theo phác đồ an toàn.',
-                            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                        Text(
+                          'KẾT QUẢ CẬN LÂM SÀNG TỪ PHÒNG XÉT NGHIỆM & CĐHA:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
+                            color: Color(0xFF0D9488),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-                const SizedBox(height: 18),
-
-                const SectionTitle(title: 'Lời dặn của bác sĩ'),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _adviceController,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Lời dặn / Hẹn ngày tái khám',
-                    hintText: 'Ví dụ: Uống nhiều nước, ăn thanh đạm.',
-                    alignLabelWithHint: true,
-                  ),
-                ),
-                const SizedBox(height: 18),
-
-                const SectionTitle(title: 'Kế hoạch Hẹn ngày Tái khám'),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ChoiceChip(
-                      label: const Text('7 ngày nữa'),
-                      selected: _selectedFollowUpDays == 7,
-                      onSelected: (val) {
-                        setState(() {
-                          _selectedFollowUpDays = val ? 7 : null;
-                          _selectedFollowUpDate = val ? DateTime.now().add(const Duration(days: 7)) : null;
-                        });
-                      },
+                    SizedBox(height: 6),
+                    Text(
+                      '• Điện tâm đồ ECG: Nhịp xoang đều 78ck/p, trục trung gian, không thiếu máu cơ tim cấp.',
+                      style: TextStyle(fontSize: 12.5),
                     ),
-                    ChoiceChip(
-                      label: const Text('14 ngày nữa'),
-                      selected: _selectedFollowUpDays == 14,
-                      onSelected: (val) {
-                        setState(() {
-                          _selectedFollowUpDays = val ? 14 : null;
-                          _selectedFollowUpDate = val ? DateTime.now().add(const Duration(days: 14)) : null;
-                        });
-                      },
+                    Text(
+                      '• Siêu âm tim: Buồng tim kích thước bình thường, EF 62%, hở van 2 lá sinh lý 1/4.',
+                      style: TextStyle(fontSize: 12.5),
                     ),
-                    ChoiceChip(
-                      label: const Text('1 tháng nữa'),
-                      selected: _selectedFollowUpDays == 30,
-                      onSelected: (val) {
-                        setState(() {
-                          _selectedFollowUpDays = val ? 30 : null;
-                          _selectedFollowUpDate = val ? DateTime.now().add(const Duration(days: 30)) : null;
-                        });
-                      },
+                    Text(
+                      '• Công thức máu: WBC 6.8 G/L, RBC 4.6 T/L, Hb 142 g/L (Bình thường).',
+                      style: TextStyle(fontSize: 12.5),
                     ),
-                    ActionChip(
-                      avatar: const Icon(Icons.calendar_month_rounded, size: 16),
-                      label: Text(_selectedFollowUpDate != null && _selectedFollowUpDays == null
-                          ? AppTimezone.date(_selectedFollowUpDate!)
-                          : 'Chọn ngày'),
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now().add(const Duration(days: 7)),
-                          firstDate: DateTime.now().add(const Duration(days: 1)),
-                          lastDate: DateTime.now().add(const Duration(days: 90)),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            _selectedFollowUpDays = null;
-                            _selectedFollowUpDate = picked;
-                          });
-                        }
-                      },
+                    Text(
+                      '• Sinh hóa máu: Glucose đói 5.3 mmol/L, Creatinine 76 umol/L (Chức năng thận tốt).',
+                      style: TextStyle(fontSize: 12.5),
                     ),
                   ],
                 ),
-                if (_selectedFollowUpDate != null) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.withValues(alpha: 0.25)),
+              ),
+            ],
+            const SizedBox(height: 20),
+
+            const SectionTitle(title: 'Mẫu kê nhanh (Templates)'),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  ActionChip(
+                    avatar: const Icon(
+                      Icons.flash_on,
+                      size: 16,
+                      color: Colors.orange,
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.event_repeat_rounded, color: Colors.blue, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Bác sĩ đặt lịch hẹn tái khám: ${AppTimezone.date(_selectedFollowUpDate!)}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.blue),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () => setState(() {
-                            _selectedFollowUpDate = null;
-                            _selectedFollowUpDays = null;
-                          }),
-                          child: const Icon(Icons.close, size: 16, color: Colors.blue),
-                        ),
-                      ],
+                    label: const Text('Cảm cúm / Viêm họng'),
+                    onPressed: () => _applyTemplate(
+                      'Viêm đường hô hấp trên cấp tính, sốt nhẹ',
+                      '1. Paracetamol 500mg - 1 viên x 3 lần/ngày sau ăn khi sốt\n2. Vitamin C 500mg - 1 viên/ngày buổi sáng',
+                      'Uống nhiều nước ấm, súc họng nước muối. Tái khám sau 3 ngày nếu sốt không giảm.',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ActionChip(
+                    avatar: const Icon(
+                      Icons.flash_on,
+                      size: 16,
+                      color: Colors.red,
+                    ),
+                    label: const Text('Tăng huyết áp'),
+                    onPressed: () => _applyTemplate(
+                      'Tăng huyết áp vô căn độ 1',
+                      '1. Amlodipine 5mg - 1 viên/ngày vào 8h sáng\n2. Aspirin 81mg - 1 viên/ngày sau ăn',
+                      'Ăn nhạt, hạn chế mỡ động vật, đo huyết áp mỗi sáng. Tái khám sau 1 tháng.',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ActionChip(
+                    avatar: const Icon(
+                      Icons.flash_on,
+                      size: 16,
+                      color: Colors.green,
+                    ),
+                    label: const Text('Khám sức khỏe tốt'),
+                    onPressed: () => _applyTemplate(
+                      'Hiện tại chưa phát hiện bất thường, sức khỏe tốt',
+                      '1. Multivitamin tổng hợp - 1 viên/ngày sau ăn sáng',
+                      'Duy trì chế độ ăn lành mạnh và tập luyện 30 phút mỗi ngày.',
                     ),
                   ),
                 ],
-                const SizedBox(height: 26),
+              ),
+            ),
+            const SizedBox(height: 16),
 
-                ElevatedButton.icon(
-                  onPressed: _submitting ? null : _submit,
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: Text(_submitting ? 'Đang lưu kết quả...' : 'Hoàn tất ca khám'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.success,
+            const SectionTitle(title: 'Kết quả khám bệnh'),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _diagnosisController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Chẩn đoán bệnh *',
+                hintText: 'Ví dụ: Viêm họng cấp / Huyết áp ổn định...',
+                alignLabelWithHint: true,
+              ),
+              validator: (val) => val == null || val.trim().isEmpty
+                  ? 'Vui lòng nhập chẩn đoán'
+                  : null,
+            ),
+            const SizedBox(height: 18),
+
+            SectionTitle(
+              title: 'Đơn thuốc điện tử',
+              action: TextButton.icon(
+                onPressed: _showMedicineSelector,
+                icon: const Icon(Icons.add_circle_outline, size: 16),
+                label: const Text('Chọn từ kho dược'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _prescriptionController,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                labelText: 'Toa thuốc kê cho bệnh nhân',
+                hintText: 'Ví dụ:\n1. Paracetamol 500mg - 2 viên/ngày sau ăn\n2. Vitamin C 500mg - 1 viên/ngày',
+                alignLabelWithHint: true,
+              ),
+            ),
+            if (_hasAllergyRisk) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.report_problem_rounded,
+                      color: Colors.red,
+                      size: 20,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '🚨 CẢNH BÁO AN TOÀN DƯỢC LÂM SÀNG: Toa thuốc chứa hoạt chất dị ứng (Penicillin/Amoxicillin)! Vui lòng đổi thuốc theo phác đồ an toàn.',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 18),
+
+            const SectionTitle(title: 'Lời dặn của bác sĩ'),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _adviceController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Lời dặn / Hẹn ngày tái khám',
+                hintText: 'Ví dụ: Uống nhiều nước, ăn thanh đạm.',
+                alignLabelWithHint: true,
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            const SectionTitle(title: 'Kế hoạch Hẹn ngày Tái khám'),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text('7 ngày nữa'),
+                  selected: _selectedFollowUpDays == 7,
+                  onSelected: (val) {
+                    setState(() {
+                      _selectedFollowUpDays = val ? 7 : null;
+                      _selectedFollowUpDate = val
+                          ? DateTime.now().add(const Duration(days: 7))
+                          : null;
+                    });
+                  },
+                ),
+                ChoiceChip(
+                  label: const Text('14 ngày nữa'),
+                  selected: _selectedFollowUpDays == 14,
+                  onSelected: (val) {
+                    setState(() {
+                      _selectedFollowUpDays = val ? 14 : null;
+                      _selectedFollowUpDate = val
+                          ? DateTime.now().add(const Duration(days: 14))
+                          : null;
+                    });
+                  },
+                ),
+                ChoiceChip(
+                  label: const Text('1 tháng nữa'),
+                  selected: _selectedFollowUpDays == 30,
+                  onSelected: (val) {
+                    setState(() {
+                      _selectedFollowUpDays = val ? 30 : null;
+                      _selectedFollowUpDate = val
+                          ? DateTime.now().add(const Duration(days: 30))
+                          : null;
+                    });
+                  },
+                ),
+                ActionChip(
+                  avatar: const Icon(Icons.calendar_month_rounded, size: 16),
+                  label: Text(
+                    _selectedFollowUpDate != null &&
+                            _selectedFollowUpDays == null
+                        ? AppTimezone.date(_selectedFollowUpDate!)
+                        : 'Chọn ngày',
                   ),
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime.now().add(const Duration(days: 7)),
+                      firstDate: DateTime.now().add(const Duration(days: 1)),
+                      lastDate: DateTime.now().add(const Duration(days: 90)),
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        _selectedFollowUpDays = null;
+                        _selectedFollowUpDate = picked;
+                      });
+                    }
+                  },
                 ),
               ],
             ),
-          ),
+            if (_selectedFollowUpDate != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.blue.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.event_repeat_rounded,
+                      color: Colors.blue,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Bác sĩ đặt lịch hẹn tái khám: ${AppTimezone.date(_selectedFollowUpDate!)}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12.5,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => setState(() {
+                        _selectedFollowUpDate = null;
+                        _selectedFollowUpDays = null;
+                      }),
+                      child: const Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Colors.blue,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 26),
+
+            ElevatedButton.icon(
+              onPressed: _submitting ? null : _submit,
+              icon: const Icon(Icons.check_circle_outline),
+              label: Text(
+                _submitting ? 'Đang lưu kết quả...' : 'Hoàn tất ca khám',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.success,
+              ),
+            ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 
   void _showPatientMedicalHistoryModal(BuildContext context) {
     final pastVisits = AppointmentStore.instance.appointments
-        .where((a) =>
-            a.id != widget.appointment.id &&
-            a.status == AppointmentStatus.completed &&
-            (a.patientId == widget.appointment.patientId ||
-                a.patientName == widget.appointment.patientName))
+        .where(
+          (a) =>
+              a.id != widget.appointment.id &&
+              a.status == AppointmentStatus.completed &&
+              (a.patientId == widget.appointment.patientId ||
+                  a.patientName == widget.appointment.patientName),
+        )
         .toList();
 
     showModalBottomSheet(
@@ -1690,7 +1990,10 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  const Icon(Icons.history_edu_rounded, color: AppColors.primary),
+                  const Icon(
+                    Icons.history_edu_rounded,
+                    color: AppColors.primary,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
@@ -1698,11 +2001,17 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
                       children: [
                         Text(
                           'LỊCH SỬ BỆNH ÁN CŨ - ${widget.appointment.patientName}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14.5,
+                          ),
                         ),
                         const Text(
                           'Tra cứu bệnh sử, chẩn đoán cũ & đơn thuốc đã từng điều trị',
-                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF64748B),
+                          ),
                         ),
                       ],
                     ),
@@ -1732,11 +2041,21 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
                       children: [
                         Text(
                           '⚠️ TIỀN SỬ DỊ ỨNG & BỆNH NỀN:',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.red),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: Colors.red,
+                          ),
                         ),
                         SizedBox(height: 4),
-                        Text('• Dị ứng thuốc: Nhóm Penicillin, Amoxicillin (Khó thở, phát ban cấp năm 2024)', style: TextStyle(fontSize: 12)),
-                        Text('• Bệnh nền: Tăng huyết áp vô căn 3 năm, viêm trợt dạ dày nhẹ', style: TextStyle(fontSize: 12)),
+                        Text(
+                          '• Dị ứng thuốc: Nhóm Penicillin, Amoxicillin (Khó thở, phát ban cấp năm 2024)',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        Text(
+                          '• Bệnh nền: Tăng huyết áp vô căn 3 năm, viêm trợt dạ dày nhẹ',
+                          style: TextStyle(fontSize: 12),
+                        ),
                       ],
                     ),
                   ),
@@ -1766,18 +2085,21 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
                     _buildPastVisitCard(
                       date: '15/09/2026',
                       doctor: 'BS. Trần Thảo Linh (Khoa Tim mạch)',
-                      diagnosis: 'Tăng huyết áp độ 1, đau thắt ngực nhẹ khi gắng sức',
+                      diagnosis:
+                          'Tăng huyết áp độ 1, đau thắt ngực nhẹ khi gắng sức',
                       prescription: '1. Amlodipine 5mg - 1 viên/ngày 8h sáng\n2. Aspirin 81mg - 1 viên/ngày sau ăn',
                       advice: 'Hạn chế ăn mặn, tập thể dục nhẹ nhàng 30p mỗi ngày, tái khám sau 1 tháng.',
                     ),
                   ] else ...[
-                    ...pastVisits.map((v) => _buildPastVisitCard(
-                          date: '${v.dateLabel} lúc ${v.time}',
-                          doctor: '${v.doctorName} (${v.department})',
-                          diagnosis: v.diagnosis ?? 'Khám tổng quát định kỳ',
-                          prescription: v.prescription ?? 'Chưa có đơn thuốc',
-                          advice: v.statusNote ?? '',
-                        )),
+                    ...pastVisits.map(
+                      (v) => _buildPastVisitCard(
+                        date: '${v.dateLabel} lúc ${v.time}',
+                        doctor: '${v.doctorName} (${v.department})',
+                        diagnosis: v.diagnosis ?? 'Khám tổng quát định kỳ',
+                        prescription: v.prescription ?? 'Chưa có đơn thuốc',
+                        advice: v.statusNote ?? '',
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -1808,11 +2130,18 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.event_available_rounded, size: 16, color: AppColors.primary),
+              const Icon(
+                Icons.event_available_rounded,
+                size: 16,
+                color: AppColors.primary,
+              ),
               const SizedBox(width: 6),
               Text(
                 'Ngày khám: $date',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
               ),
               const Spacer(),
               Container(
@@ -1823,20 +2152,40 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
                 ),
                 child: const Text(
                   'Đã hoàn tất',
-                  style: TextStyle(color: Color(0xFF16A34A), fontSize: 11, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: Color(0xFF16A34A),
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          Text('Bác sĩ: $doctor', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+          Text(
+            'Bác sĩ: $doctor',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+          ),
           const Divider(height: 12),
-          Text('• Chẩn đoán: $diagnosis', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+          Text(
+            '• Chẩn đoán: $diagnosis',
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 4),
-          Text('• Đơn thuốc cũ:\n$prescription', style: const TextStyle(fontSize: 12, color: Color(0xFF334155))),
+          Text(
+            '• Đơn thuốc cũ:\n$prescription',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+          ),
           if (advice.isNotEmpty) ...[
             const SizedBox(height: 4),
-            Text('• Lời dặn cũ: $advice', style: const TextStyle(fontSize: 11.5, fontStyle: FontStyle.italic, color: Color(0xFF64748B))),
+            Text(
+              '• Lời dặn cũ: $advice',
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontStyle: FontStyle.italic,
+                color: Color(0xFF64748B),
+              ),
+            ),
           ],
           const SizedBox(height: 8),
           Align(
@@ -1847,7 +2196,10 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 10),
               ),
               icon: const Icon(Icons.copy_rounded, size: 14),
-              label: const Text('Kê lại đơn thuốc này', style: TextStyle(fontSize: 12)),
+              label: const Text(
+                'Kê lại đơn thuốc này',
+                style: TextStyle(fontSize: 12),
+              ),
               onPressed: () {
                 _prescriptionController.text = prescription;
                 Navigator.pop(context);
@@ -1873,110 +2225,117 @@ class DoctorExaminationDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Chi tiết bệnh án & Đơn thuốc')),
-        body: ListView(
-          padding: const EdgeInsets.all(18),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
+    appBar: AppBar(title: const Text('Chi tiết bệnh án & Đơn thuốc')),
+    body: ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Bệnh nhân: ${appointment.patientName}',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              child: Column(
+              const SizedBox(height: 6),
+              Text(
+                'Mã lịch hẹn: ${appointment.id}',
+                style: const TextStyle(color: AppColors.mutedText),
+              ),
+              Text(
+                'Thời gian khám: ${appointment.time} - ${AppTimezone.date(appointment.date)}',
+              ),
+              const SizedBox(height: 8),
+              Text('Lý do khám: ${appointment.reason}'),
+            ],
+          ),
+        ),
+        Builder(
+          builder: (context) {
+            final intake = ClinicalIntakeStore.instance.getByAppointmentId(
+              appointment.id,
+            );
+            if (intake != null) {
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Bệnh nhân: ${appointment.patientName}',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 6),
-                  Text('Mã lịch hẹn: ${appointment.id}', style: const TextStyle(color: AppColors.mutedText)),
-                  Text('Thời gian khám: ${appointment.time} - ${AppTimezone.date(appointment.date)}'),
-                  const SizedBox(height: 8),
-                  Text('Lý do khám: ${appointment.reason}'),
+                  const SizedBox(height: 16),
+                  IntakeSummaryCard(intake: intake, isDoctorView: true),
                 ],
-              ),
-            ),
-            Builder(
-              builder: (context) {
-                final intake = ClinicalIntakeStore.instance.getByAppointmentId(appointment.id);
-                if (intake != null) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 16),
-                      IntakeSummaryCard(intake: intake, isDoctorView: true),
-                    ],
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
-            const SizedBox(height: 16),
-            _infoCard(
-              title: 'Chẩn đoán của Bác sĩ',
-              icon: Icons.assignment_outlined,
-              content: appointment.diagnosis ?? 'Chưa ghi chẩn đoán',
-              color: AppColors.primary,
-            ),
-            const SizedBox(height: 16),
-            _infoCard(
-              title: 'Đơn thuốc đã kê',
-              icon: Icons.medication_outlined,
-              content: appointment.prescription ?? 'Không kê đơn',
-              color: AppColors.success,
-            ),
-            if (appointment.statusNote != null && appointment.statusNote!.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _infoCard(
-                title: 'Lời dặn',
-                icon: Icons.tips_and_updates_outlined,
-                content: appointment.statusNote!,
-                color: Colors.amber.shade800,
-              ),
-            ],
-          ],
+              );
+            }
+            return const SizedBox.shrink();
+          },
         ),
-      );
+        const SizedBox(height: 16),
+        _infoCard(
+          title: 'Chẩn đoán của Bác sĩ',
+          icon: Icons.assignment_outlined,
+          content: appointment.diagnosis ?? 'Chưa ghi chẩn đoán',
+          color: AppColors.primary,
+        ),
+        const SizedBox(height: 16),
+        _infoCard(
+          title: 'Đơn thuốc đã kê',
+          icon: Icons.medication_outlined,
+          content: appointment.prescription ?? 'Không kê đơn',
+          color: AppColors.success,
+        ),
+        if (appointment.statusNote != null &&
+            appointment.statusNote!.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _infoCard(
+            title: 'Lời dặn',
+            icon: Icons.tips_and_updates_outlined,
+            content: appointment.statusNote!,
+            color: Colors.amber.shade800,
+          ),
+        ],
+      ],
+    ),
+  );
 
   Widget _infoCard({
     required String title,
     required IconData icon,
     required String content,
     required Color color,
-  }) =>
-      Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  }) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Icon(icon, color: color, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 20),
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
             Text(
-              content,
-              style: const TextStyle(fontSize: 15, height: 1.4),
+              title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
             ),
           ],
         ),
-      );
+        const Divider(height: 20),
+        Text(content, style: const TextStyle(fontSize: 15, height: 1.4)),
+      ],
+    ),
+  );
 }

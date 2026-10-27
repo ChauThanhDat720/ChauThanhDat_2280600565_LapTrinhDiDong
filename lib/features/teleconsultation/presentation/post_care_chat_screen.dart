@@ -1,4 +1,11 @@
+import 'dart:async';
+
+import '../../../core/repositories/application_backend.dart';
+
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../doctors/domain/doctor.dart';
@@ -14,15 +21,17 @@ class PostCareChatScreen extends StatefulWidget {
     this.isDoctorView = false,
     this.currentUserId,
     this.currentUserName,
-    this.repository = const LocalTeleconsultationRepository(),
-  });
+    TeleconsultationRepository? repository,
+  }) : _providedRepository = repository;
 
   final String appointmentId;
   final String? sessionId;
   final bool isDoctorView;
   final String? currentUserId;
   final String? currentUserName;
-  final TeleconsultationRepository repository;
+  final TeleconsultationRepository? _providedRepository;
+  TeleconsultationRepository get repository =>
+      _providedRepository ?? ApplicationBackend.repositories.teleconsultations;
 
   @override
   State<PostCareChatScreen> createState() => _PostCareChatScreenState();
@@ -32,6 +41,11 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _loading = true;
+  bool _sending = false;
+  bool _changingAutomation = false;
+  String? _loadError;
+  Timer? _pollTimer;
+  bool _polling = false;
   TeleconsultationSession? _session;
   bool _showPrescriptionSummary = true;
   String? _selectedAttachmentUrl;
@@ -42,31 +56,15 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
     '🤢 Em bị choáng váng nhẹ sau uống, có sao không ạ?',
     '🌿 Em có cần kiêng đồ cay nóng/rượu bia không BS?',
     '🩺 Vết thương hơi ngứa nhẹ có bình thường không ạ?',
+    'Em quên uống một liều thuốc, cần làm gì?',
+    'Yêu cầu bác sĩ trả lời',
   ];
 
   static const List<String> _doctorQuickPrompts = [
-    '👍 Triệu chứng này bình thường khi mới làm quen thuốc, bạn tiếp tục uống đúng liều nhé.',
-    '⚠️ Hãy tạm dừng thuốc và đến bệnh viện tái khám sớm để kiểm tra lại.',
-    '💧 Bạn nên uống nhiều nước và uống thuốc sau bữa ăn no 30 phút nhé.',
+    'Bạn mô tả thêm mức độ triệu chứng, thời điểm xuất hiện và thuốc đang dùng nhé.',
+    'Bạn vui lòng đến cơ sở khám để được đánh giá trực tiếp nếu triệu chứng nặng lên.',
+    'Bạn sử dụng thuốc theo đúng đơn và hướng dẫn trên nhãn thuốc nhé.',
     '🩺 Tiến triển rất tốt, bạn duy trì theo đúng chỉ dẫn của toa thuốc nhé.',
-  ];
-
-  static const List<Map<String, String>> _sampleImages = [
-    {
-      'name': 'Ảnh mẩn ngứa / phát ban da',
-      'url': 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=500&auto=format&fit=crop&q=60',
-      'icon': '🔴',
-    },
-    {
-      'name': 'Ảnh vỉ thuốc đang sử dụng',
-      'url': 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=500&auto=format&fit=crop&q=60',
-      'icon': '💊',
-    },
-    {
-      'name': 'Ảnh nhiệt kế / máy đo huyết áp',
-      'url': 'https://images.unsplash.com/photo-1628771065518-0d82f1938462?w=500&auto=format&fit=crop&q=60',
-      'icon': '🩺',
-    },
   ];
 
   @override
@@ -74,10 +72,17 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
     super.initState();
     _loadSession();
     TeleconsultationStore.instance.addListener(_onStoreChanged);
+    if (widget.repository is RemoteTeleconsultationRepository) {
+      _pollTimer = Timer.periodic(
+        const Duration(seconds: 15),
+        (_) => _pollSession(),
+      );
+    }
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     TeleconsultationStore.instance.removeListener(_onStoreChanged);
     _textController.dispose();
     _scrollController.dispose();
@@ -85,32 +90,62 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
   }
 
   void _onStoreChanged() {
-    if (!mounted || _session == null) return;
+    if (!mounted ||
+        _session == null ||
+        widget.repository is! LocalTeleconsultationRepository) {
+      return;
+    }
     final updated = TeleconsultationStore.instance.findById(_session!.id);
     if (updated != null && mounted) {
       setState(() => _session = updated);
+      _scrollToBottom();
+    }
+  }
+
+  Future<void> _pollSession() async {
+    if (_polling || _sending || _loading || !mounted) return;
+    _polling = true;
+    try {
+      final updated = await widget.repository.getOrCreateSession(
+        widget.appointmentId,
+      );
+      if (mounted) setState(() => _session = updated);
+    } catch (_) {
+      // Keep the current conversation while offline; manual refresh exposes errors.
+    } finally {
+      _polling = false;
     }
   }
 
   Future<void> _loadSession() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
     try {
-      final session = await widget.repository.getOrCreateSession(widget.appointmentId);
+      final session = await widget.repository.getOrCreateSession(
+        widget.appointmentId,
+      );
       if (mounted) {
         setState(() {
           _session = session;
           _loading = false;
         });
         // Mark messages as read
-        widget.repository.markAsRead(
+        await widget.repository.markAsRead(
           session.id,
-          widget.isDoctorView ? MessageSenderType.doctor : MessageSenderType.patient,
+          widget.isDoctorView
+              ? MessageSenderType.doctor
+              : MessageSenderType.patient,
         );
         _scrollToBottom();
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+          _loadError = e.toString();
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Không thể tải phiên tư vấn: $e')),
         );
@@ -120,7 +155,7 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
+      if (mounted && _scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
@@ -131,89 +166,171 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
   }
 
   Future<void> _sendMessage([String? quickText]) async {
-    final text = quickText ?? _textController.text;
-    final imgUrl = _selectedAttachmentUrl;
-    if (text.trim().isEmpty && imgUrl == null) return;
-    if (_session == null || !_session!.canChat) return;
-
-    _textController.clear();
-    setState(() {
-      _selectedAttachmentUrl = null;
-      _selectedAttachmentName = null;
-    });
-
-    final senderType = widget.isDoctorView ? MessageSenderType.doctor : MessageSenderType.patient;
-    final senderId = widget.currentUserId ?? (widget.isDoctorView ? _session!.doctorId : _session!.patientId);
-    final senderName = widget.currentUserName ?? (widget.isDoctorView ? _session!.doctorName : _session!.patientName);
-
+    if (_sending) return;
+    final text = (quickText ?? _textController.text).trim();
+    final image = _selectedAttachmentUrl;
+    if ((text.isEmpty && image == null) ||
+        _session == null ||
+        !_session!.canChat) {
+      return;
+    }
+    setState(() => _sending = true);
+    final session = _session!;
     try {
       await widget.repository.sendMessage(
-        _session!.id,
-        senderType: senderType,
-        senderId: senderId,
-        senderName: senderName,
-        message: text.trim().isEmpty ? '[Đã gửi hình ảnh triệu chứng]' : text.trim(),
-        imageUrl: imgUrl,
+        session.id,
+        senderType: widget.isDoctorView
+            ? MessageSenderType.doctor
+            : MessageSenderType.patient,
+        senderId:
+            widget.currentUserId ??
+            (widget.isDoctorView ? session.doctorId : session.patientId),
+        senderName:
+            widget.currentUserName ??
+            (widget.isDoctorView ? session.doctorName : session.patientName),
+        message: text.isEmpty ? '[Đã gửi hình ảnh triệu chứng]' : text,
+        imageUrl: image,
       );
+      if (!mounted) return;
+      if (quickText == null) _textController.clear();
+      setState(() {
+        _selectedAttachmentUrl = null;
+        _selectedAttachmentName = null;
+      });
+      try {
+        final refreshed = await widget.repository.getOrCreateSession(
+          widget.appointmentId,
+        );
+        if (mounted) setState(() => _session = refreshed);
+        await widget.repository.markAsRead(
+          session.id,
+          widget.isDoctorView
+              ? MessageSenderType.doctor
+              : MessageSenderType.patient,
+        );
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Tin nhắn đã lưu. Hãy mở lại cuộc hội thoại nếu chưa thấy phản hồi.',
+              ),
+            ),
+          );
+        }
+      }
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Không thể gửi tin nhắn: $e')),
+          SnackBar(
+            content: Text(
+              'Không thể gửi tin nhắn. Nội dung vẫn được giữ để thử lại: $e',
+            ),
+          ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _toggleAutomation(bool enabled) async {
+    if (_changingAutomation || _session == null) return;
+    setState(() => _changingAutomation = true);
+    try {
+      final updated = await widget.repository.setAutoReplyEnabled(
+        _session!.id,
+        enabled,
+      );
+      if (mounted) setState(() => _session = updated);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể thay đổi phản hồi tự động: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _changingAutomation = false);
     }
   }
 
   void _showImagePickerSheet() {
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Row(
-                  children: [
-                    const Icon(Icons.add_photo_alternate_rounded, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Đính kèm hình ảnh triệu chứng',
-                      style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(),
-              ..._sampleImages.map(
-                (item) => ListTile(
-                  leading: Text(item['icon']!, style: const TextStyle(fontSize: 22)),
-                  title: Text(item['name']!, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: const Text('Hình ảnh mẫu lâm sàng thực tế'),
-                  trailing: const Icon(Icons.check_circle_outline, color: AppColors.primary),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    setState(() {
-                      _selectedAttachmentUrl = item['url'];
-                      _selectedAttachmentName = item['name'];
-                    });
-                  },
-                ),
-              ),
-            ],
-          ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Chọn ảnh từ thư viện'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Chụp ảnh mới'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1280,
+        maxHeight: 1280,
+        imageQuality: 70,
+        requestFullMetadata: false,
+      );
+      if (file == null || !mounted) return;
+      final bytes = await file.readAsBytes();
+      if (bytes.length > 1024 * 1024) {
+        throw StateError('Ảnh vượt quá 1 MB. Vui lòng chọn ảnh nhỏ hơn.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _selectedAttachmentUrl =
+            'data:${file.mimeType ?? 'image/jpeg'};base64,${base64Encode(bytes)}';
+        _selectedAttachmentName = file.name;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Không thể chọn ảnh: $e')));
+      }
+    }
+  }
+
+  Widget _chatImage(String url, {BoxFit fit = BoxFit.cover}) {
+    Widget failed(BuildContext context, Object error, StackTrace? stack) =>
+        const SizedBox(
+          height: 120,
+          width: 180,
+          child: Center(child: Text('Không thể tải hình ảnh.')),
+        );
+    if (url.startsWith('data:')) {
+      try {
+        return Image.memory(
+          Uri.parse(url).data!.contentAsBytes(),
+          fit: fit,
+          errorBuilder: failed,
+        );
+      } catch (_) {
+        return failed(context, StateError('Ảnh không hợp lệ'), null);
+      }
+    }
+    return Image.network(url, fit: fit, errorBuilder: failed);
   }
 
   Future<void> _closeSessionByDoctor() async {
@@ -230,7 +347,9 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
             child: const Text('Hủy'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Xác nhận kết thúc'),
           ),
@@ -254,9 +373,8 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Lỗi: $e')),
-          );
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('Lỗi: $e')));
         }
       }
     }
@@ -274,7 +392,27 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
     if (_session == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Tư vấn y tế hậu khám')),
-        body: const Center(child: Text('Không tìm thấy thông tin ca tư vấn.')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _loadError == null
+                      ? 'Không tìm thấy thông tin ca tư vấn.'
+                      : 'Không thể tải cuộc hội thoại. Vui lòng thử lại.',
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _loadSession,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Thử lại'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -290,9 +428,13 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor: isDoctor ? const Color(0xFFE0F2FE) : const Color(0xFFCCFBF1),
+              backgroundColor: isDoctor
+                  ? const Color(0xFFE0F2FE)
+                  : const Color(0xFFCCFBF1),
               child: Icon(
-                isDoctor ? Icons.person_rounded : Icons.medical_services_rounded,
+                isDoctor
+                    ? Icons.person_rounded
+                    : Icons.medical_services_rounded,
                 color: isDoctor ? const Color(0xFF0284C7) : AppColors.primary,
                 size: 20,
               ),
@@ -304,7 +446,10 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
                 children: [
                   Text(
                     partnerName,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -321,7 +466,12 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
           ],
         ),
         actions: [
-          _buildStatusBadge(session),
+          IconButton(
+            tooltip: 'Tải lại hội thoại',
+            onPressed: _sending ? null : _loadSession,
+            icon: const Icon(Icons.refresh),
+          ),
+
           if (isDoctor && session.canChat)
             IconButton(
               icon: const Icon(Icons.check_circle_outline_rounded),
@@ -335,7 +485,30 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
         children: [
           // Sticky Medical Prescription & Diagnosis Accordion
           _buildMedicalSummaryAccordion(session),
+          if (!isDoctor)
+            SwitchListTile.adaptive(
+              dense: true,
+              title: const Text(
+                'Trợ lý hậu khám tự động',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text(
+                'Hướng dẫn cơ bản; không thay thế bác sĩ. Bạn có thể yêu cầu bác sĩ trả lời.',
+                style: TextStyle(fontSize: 11),
+              ),
+              value: session.autoReplyEnabled,
+              onChanged: session.canChat && !_sending && !_changingAutomation
+                  ? _toggleAutomation
+                  : null,
+            ),
 
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _buildStatusBadge(session),
+            ),
+          ),
           // Chat messages list
           Expanded(
             child: ListView.builder(
@@ -419,13 +592,19 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
       child: Column(
         children: [
           InkWell(
-            onTap: () => setState(() => _showPrescriptionSummary = !_showPrescriptionSummary),
+            onTap: () => setState(
+              () => _showPrescriptionSummary = !_showPrescriptionSummary,
+            ),
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.assignment_outlined, size: 18, color: Color(0xFF16A34A)),
+                  const Icon(
+                    Icons.assignment_outlined,
+                    size: 18,
+                    color: Color(0xFF16A34A),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -459,20 +638,39 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('🩺 Chẩn đoán: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        const Text(
+                          '🩺 Chẩn đoán: ',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
                         Expanded(
-                          child: Text(session.diagnosis!, style: const TextStyle(fontSize: 12)),
+                          child: Text(
+                            session.diagnosis!,
+                            style: const TextStyle(fontSize: 12),
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
                   ],
                   if (session.prescription?.isNotEmpty == true) ...[
-                    const Text('💊 Toa thuốc:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    const Text(
+                      '💊 Toa thuốc:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
                     const SizedBox(height: 2),
                     Text(
                       session.prescription!,
-                      style: const TextStyle(fontSize: 12, height: 1.35, color: Color(0xFF1E293B)),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        color: Color(0xFF1E293B),
+                      ),
                     ),
                   ],
                 ],
@@ -498,12 +696,19 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF64748B)),
+              const Icon(
+                Icons.info_outline_rounded,
+                size: 16,
+                color: Color(0xFF64748B),
+              ),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
                   message.message,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF475569),
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -516,22 +721,34 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
     // Determine bubble placement:
     // If viewing as patient: patient on right, doctor on left.
     // If viewing as doctor: doctor on right, patient on left.
-    final bool isMyMessage = widget.isDoctorView ? message.isDoctor : message.isPatient;
+    final bool isMyMessage = widget.isDoctorView
+        ? message.isDoctor
+        : message.isPatient;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
-        mainAxisAlignment: isMyMessage ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMyMessage
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMyMessage) ...[
             CircleAvatar(
               radius: 14,
-              backgroundColor: message.isDoctor ? const Color(0xFFCCFBF1) : const Color(0xFFE2E8F0),
+              backgroundColor: message.isDoctor
+                  ? const Color(0xFFCCFBF1)
+                  : const Color(0xFFE2E8F0),
               child: Icon(
-                message.isDoctor ? Icons.medical_services_rounded : Icons.person_rounded,
+                message.isAssistant
+                    ? Icons.smart_toy_outlined
+                    : message.isDoctor
+                    ? Icons.medical_services_rounded
+                    : Icons.person_rounded,
                 size: 16,
-                color: message.isDoctor ? AppColors.primary : const Color(0xFF475569),
+                color: message.isDoctor
+                    ? AppColors.primary
+                    : const Color(0xFF475569),
               ),
             ),
             const SizedBox(width: 8),
@@ -550,7 +767,9 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
                   bottomRight: Radius.circular(isMyMessage ? 4 : 16),
                 ),
                 border: Border.all(
-                  color: isMyMessage ? AppColors.primary : const Color(0xFFE2E8F0),
+                  color: isMyMessage
+                      ? AppColors.primary
+                      : const Color(0xFFE2E8F0),
                 ),
                 boxShadow: [
                   BoxShadow(
@@ -561,7 +780,9 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
                 ],
               ),
               child: Column(
-                crossAxisAlignment: isMyMessage ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                crossAxisAlignment: isMyMessage
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
                 children: [
                   if (!isMyMessage)
                     Padding(
@@ -574,12 +795,18 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
-                              color: message.isDoctor ? AppColors.primary : const Color(0xFF334155),
+                              color: message.isDoctor
+                                  ? AppColors.primary
+                                  : const Color(0xFF334155),
                             ),
                           ),
                           if (message.isDoctor) ...[
                             const SizedBox(width: 4),
-                            const Icon(Icons.verified_rounded, size: 12, color: AppColors.primary),
+                            const Icon(
+                              Icons.verified_rounded,
+                              size: 12,
+                              color: AppColors.primary,
+                            ),
                           ],
                         ],
                       ),
@@ -590,25 +817,12 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Container(
-                          constraints: const BoxConstraints(maxHeight: 180, maxWidth: 220),
-                          color: Colors.grey.shade200,
-                          child: Image.network(
-                            message.imageUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Container(
-                              height: 120,
-                              width: 180,
-                              color: const Color(0xFFE2E8F0),
-                              child: const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.broken_image_rounded, color: Colors.grey),
-                                  SizedBox(height: 4),
-                                  Text('Hình ảnh lâm sàng', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                                ],
-                              ),
-                            ),
+                          constraints: const BoxConstraints(
+                            maxHeight: 180,
+                            maxWidth: 220,
                           ),
+                          color: Colors.grey.shade200,
+                          child: _chatImage(message.imageUrl!),
                         ),
                       ),
                     ),
@@ -618,7 +832,9 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
                     message.message,
                     style: TextStyle(
                       fontSize: 14,
-                      color: isMyMessage ? Colors.white : const Color(0xFF1E293B),
+                      color: isMyMessage
+                          ? Colors.white
+                          : const Color(0xFF1E293B),
                       height: 1.35,
                     ),
                   ),
@@ -638,9 +854,13 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
                       if (isMyMessage) ...[
                         const SizedBox(width: 4),
                         Icon(
-                          message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
+                          message.isRead
+                              ? Icons.done_all_rounded
+                              : Icons.done_rounded,
                           size: 13,
-                          color: message.isRead ? const Color(0xFF67E8F9) : Colors.white70,
+                          color: message.isRead
+                              ? const Color(0xFF67E8F9)
+                              : Colors.white70,
                         ),
                       ],
                     ],
@@ -671,15 +891,7 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
             ),
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                url,
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => Container(
-                  height: 200,
-                  color: Colors.white,
-                  child: const Center(child: Text('Không thể tải hình ảnh.')),
-                ),
-              ),
+              child: _chatImage(url, fit: BoxFit.contain),
             ),
           ],
         ),
@@ -693,7 +905,11 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
       color: const Color(0xFFF1F5F9),
       child: Row(
         children: [
-          const Icon(Icons.attachment_rounded, size: 18, color: AppColors.primary),
+          const Icon(
+            Icons.attachment_rounded,
+            size: 18,
+            color: AppColors.primary,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -731,7 +947,7 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
             label: Text(prompt, style: const TextStyle(fontSize: 11)),
             backgroundColor: const Color(0xFFF8FAFC),
             side: const BorderSide(color: Color(0xFFCBD5E1)),
-            onPressed: () => _sendMessage(prompt),
+            onPressed: _sending ? null : () => _sendMessage(prompt),
           );
         },
       ),
@@ -750,18 +966,25 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
         child: Row(
           children: [
             IconButton(
-              icon: const Icon(Icons.add_photo_alternate_outlined, color: AppColors.primary),
+              icon: const Icon(
+                Icons.add_photo_alternate_outlined,
+                color: AppColors.primary,
+              ),
               tooltip: 'Đính kèm hình ảnh triệu chứng',
-              onPressed: _showImagePickerSheet,
+              onPressed: _sending ? null : _showImagePickerSheet,
             ),
             Expanded(
               child: TextField(
                 controller: _textController,
+                enabled: !_sending,
+                minLines: 1,
+                maxLines: 4,
+                textInputAction: TextInputAction.send,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
                   hintText: widget.isDoctorView
                       ? 'Nhập lời khuyên hoặc hướng dẫn y khoa...'
-                      : 'Hỏi bác sĩ về phản ứng thuốc, triệu chứng...',
+                      : 'Nhập câu hỏi hậu khám...',
                   hintStyle: const TextStyle(fontSize: 13),
                   isDense: true,
                   filled: true,
@@ -770,15 +993,25 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
                     borderRadius: BorderRadius.circular(24),
                     borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                 ),
                 onSubmitted: (_) => _sendMessage(),
               ),
             ),
             const SizedBox(width: 4),
             IconButton.filled(
-              icon: const Icon(Icons.send_rounded, size: 18),
-              onPressed: () => _sendMessage(),
+              tooltip: 'Gửi tin nhắn',
+              icon: _sending
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send_rounded, size: 18),
+              onPressed: _sending ? null : () => _sendMessage(),
             ),
           ],
         ),
@@ -800,14 +1033,22 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.lock_clock_rounded, color: Color(0xFF64748B), size: 20),
+                const Icon(
+                  Icons.lock_clock_rounded,
+                  color: Color(0xFF64748B),
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     session.isClosed
                         ? 'Phiên tư vấn hậu khám này đã được kết thúc.'
                         : 'Thời hạn theo dõi 7 ngày sau khám đã kết thúc.',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF334155)),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Color(0xFF334155),
+                    ),
                   ),
                 ),
               ],
@@ -815,7 +1056,11 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
             const SizedBox(height: 6),
             const Text(
               'Nếu triệu chứng của bạn vẫn tiếp diễn hoặc cần điều chỉnh phác đồ, vui lòng đặt lịch tái khám mới tại bệnh viện hoặc gọi 115 khi khẩn cấp.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.35),
+              style: TextStyle(
+                fontSize: 12,
+                color: Color(0xFF64748B),
+                height: 1.35,
+              ),
             ),
             const SizedBox(height: 12),
             SizedBox(

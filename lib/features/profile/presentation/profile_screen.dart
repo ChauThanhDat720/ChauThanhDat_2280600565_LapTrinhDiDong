@@ -1,3 +1,5 @@
+import '../../../core/repositories/application_backend.dart';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -14,11 +16,11 @@ import '../../tools/speech/speech_screen.dart';
 import '../../tools/translation/translation_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({
-    super.key,
-    this.repository = const LocalPatientRepository(),
-  });
-  final PatientRepository repository;
+  const ProfileScreen({super.key, PatientRepository? repository})
+    : _providedRepository = repository;
+  final PatientRepository? _providedRepository;
+  PatientRepository get repository =>
+      _providedRepository ?? ApplicationBackend.repositories.patients;
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
@@ -418,10 +420,12 @@ class _ProfileAction extends StatelessWidget {
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({
     super.key,
-    this.repository = const LocalPatientRepository(),
+    PatientRepository? repository,
     this.profile,
-  });
-  final PatientRepository repository;
+  }) : _providedRepository = repository;
+  final PatientRepository? _providedRepository;
+  PatientRepository get repository =>
+      _providedRepository ?? ApplicationBackend.repositories.patients;
   final PatientProfile? profile;
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -438,6 +442,42 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _emergencyPhone;
   late final PatientRepository _repository = widget.repository;
   late String _gender;
+  bool _saving = false;
+  Future<void> _save() async {
+    if (_saving || !_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      final save = widget.profile == null
+          ? _repository.createMyProfile
+          : _repository.updateMyProfile;
+      await save(
+        PatientProfile(
+          name: _name.text,
+          email: _email.text,
+          phone: _phone.text,
+          dateOfBirth: _dateOfBirth.text,
+          gender: _gender,
+          address: _address.text,
+          emergencyContactName: _emergencyName.text,
+          emergencyContactPhone: _emergencyPhone.text,
+        ),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cập nhật thông tin thành công.')),
+      );
+      Navigator.pop(context);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Không thể lưu hồ sơ: $error')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -587,29 +627,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton(
-                    onPressed: () async {
-                      if (_formKey.currentState!.validate()) {
-                        await _repository.updateMyProfile(
-                          PatientProfile(
-                            name: _name.text,
-                            email: _email.text,
-                            phone: _phone.text,
-                            dateOfBirth: _dateOfBirth.text,
-                            gender: _gender,
-                            address: _address.text,
-                            emergencyContactName: _emergencyName.text,
-                            emergencyContactPhone: _emergencyPhone.text,
-                          ),
-                        );
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Cập nhật thông tin thành công.'),
-                          ),
-                        );
-                        Navigator.pop(context);
-                      }
-                    },
+                    onPressed: _saving ? null : _save,
                     child: const Text('Lưu thay đổi'),
                   ),
                 ],

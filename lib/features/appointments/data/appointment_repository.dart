@@ -1,3 +1,4 @@
+import '../../../core/utils/app_timezone.dart';
 import '../../../core/network/api_client.dart';
 import '../../doctors/domain/doctor.dart';
 import '../domain/appointment.dart';
@@ -192,7 +193,6 @@ class LocalAppointmentRepository implements AppointmentRepository {
     return operation;
   }
 
-
   @override
   Future<List<Appointment>> getDoctorAppointments({
     String? doctorId,
@@ -255,8 +255,9 @@ class LocalAppointmentRepository implements AppointmentRepository {
     String? reviewNote,
   }) async {
     final operation = _serial.then<Appointment>((_) async {
-      final index = AppointmentStore.instance.appointments
-          .indexWhere((element) => element.id == id);
+      final index = AppointmentStore.instance.appointments.indexWhere(
+        (element) => element.id == id,
+      );
       if (index == -1) {
         throw StateError('Appointment $id not found');
       }
@@ -276,7 +277,9 @@ class LocalAppointmentRepository implements AppointmentRepository {
   @override
   Future<Appointment> checkinAppointment(String id, {String? roomNumber}) {
     final operation = _serial.then((_) async {
-      final index = AppointmentStore.instance.appointments.indexWhere((a) => a.id == id);
+      final index = AppointmentStore.instance.appointments.indexWhere(
+        (a) => a.id == id,
+      );
       if (index < 0) {
         throw StateError('Không tìm thấy lịch khám.');
       }
@@ -291,7 +294,8 @@ class LocalAppointmentRepository implements AppointmentRepository {
         status: AppointmentStatus.checkedIn,
         queueNumber: nextQueue,
         checkedInAt: DateTime.now(),
-        roomNumber: roomNumber ??
+        roomNumber:
+            roomNumber ??
             current.roomNumber ??
             HospitalNavigationResolver.getDoctorClinicRoom(
               current.doctorId,
@@ -321,13 +325,19 @@ class RemoteAppointmentRepository implements AppointmentRepository {
       '/doctors/$doctorId/availability',
       query: {'date': date.toIso8601String().substring(0, 10)},
     );
-    final items = result is Map<String, dynamic> ? result['items'] : result;
+    final items = result is Map<String, dynamic>
+        ? result['items'] ?? result['slots']
+        : result;
     return (items as List? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(
           (item) => AppointmentSlot(
-            startTime: DateTime.parse(item['startTime'] as String).toLocal(),
-            endTime: DateTime.parse(item['endTime'] as String).toLocal(),
+            startTime: AppTimezone.fromUtc(
+              DateTime.parse(item['startTime'] as String),
+            ),
+            endTime: AppTimezone.fromUtc(
+              DateTime.parse(item['endTime'] as String),
+            ),
             isAvailable: item['isAvailable'] == true,
             unavailableReason: item['unavailableReason'] as String?,
           ),
@@ -406,16 +416,16 @@ class RemoteAppointmentRepository implements AppointmentRepository {
   }) async {
     final result = await _client.patch(
       '/appointments/$id/rating',
-      body: {
-        'rating': rating,
-        'reviewNote': ?reviewNote,
-      },
+      body: {'rating': rating, 'reviewNote': ?reviewNote},
     );
     return Appointment.fromJson(result as Map<String, dynamic>);
   }
 
   @override
-  Future<Appointment> checkinAppointment(String id, {String? roomNumber}) async {
+  Future<Appointment> checkinAppointment(
+    String id, {
+    String? roomNumber,
+  }) async {
     final result = await _client.post(
       '/appointments/$id/checkin',
       body: {'roomNumber': ?roomNumber},

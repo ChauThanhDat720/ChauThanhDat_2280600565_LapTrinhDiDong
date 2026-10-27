@@ -1,4 +1,6 @@
 import '../../../core/network/api_client.dart';
+import '../../../core/session/patient_session.dart';
+import '../../../core/storage/local_json_storage.dart';
 import '../domain/family_member.dart';
 
 abstract class FamilyRepository {
@@ -11,7 +13,12 @@ abstract class FamilyRepository {
 }
 
 class LocalFamilyRepository implements FamilyRepository {
-  LocalFamilyRepository({List<FamilyMember>? initialMembers}) {
+  LocalFamilyRepository({List<FamilyMember>? initialMembers, String? ownerId})
+    : _ownerId =
+          ownerId ??
+          (PatientSession.instance.email.isEmpty
+              ? 'local-family'
+              : PatientSession.instance.email.toLowerCase()) {
     if (initialMembers != null) {
       _members.addAll(initialMembers);
     } else {
@@ -20,6 +27,29 @@ class LocalFamilyRepository implements FamilyRepository {
   }
 
   final List<FamilyMember> _members = [];
+  final String _ownerId;
+  String get _storageKey => 'family_members_v1:$_ownerId';
+
+  Future<List<FamilyMember>> _readMembers() async {
+    final saved = await LocalJsonStorage.read(_storageKey);
+    return saved == null
+        ? List.of(_members)
+        : saved.map(FamilyMember.fromJson).toList();
+  }
+
+  Future<T> _change<T>(T Function(List<FamilyMember>) update) =>
+      LocalJsonStorage.exclusive(_storageKey, () async {
+        final members = await _readMembers();
+        final result = update(members);
+        await LocalJsonStorage.write(
+          _storageKey,
+          members.map((m) => m.toJson()).toList(),
+        );
+        _members
+          ..clear()
+          ..addAll(members);
+        return result;
+      });
 
   void _seedDefaultMembers() {
     final now = DateTime.now();
@@ -74,178 +104,144 @@ class LocalFamilyRepository implements FamilyRepository {
 
   @override
   Future<List<FamilyMember>> getMembers({String? primaryPatientId}) async {
-    return List<FamilyMember>.from(_members);
+    final members = await _readMembers();
+    return primaryPatientId == null
+        ? members
+        : members.where((m) => m.primaryPatientId == primaryPatientId).toList();
   }
 
   @override
   Future<FamilyMember?> getMemberById(String id) async {
-    final found = _members.where((m) => m.id == id);
-    return found.isNotEmpty ? found.first : null;
+    final members = await _readMembers();
+    for (final member in members) {
+      if (member.id == id) return member;
+    }
+    return null;
   }
 
   @override
-  Future<FamilyMember> createMember(FamilyMember member) async {
-    final newId = member.id.isNotEmpty ? member.id : 'fam-${DateTime.now().millisecondsSinceEpoch}';
+  Future<FamilyMember> createMember(FamilyMember member) => _change((members) {
+    if (member.fullName.trim().isEmpty) {
+      throw ArgumentError('Vui lòng nhập họ tên.');
+    }
     final created = member.copyWith(
-      id: newId,
+      id: member.id.isEmpty
+          ? 'fam-${DateTime.now().microsecondsSinceEpoch}'
+          : member.id,
+      fullName: member.fullName.trim(),
+      isDefault: members.isEmpty || member.isDefault,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
-
+    if (members.any((m) => m.id == created.id)) {
+      throw StateError('Thành viên đã tồn tại.');
+    }
     if (created.isDefault) {
-      for (int i = 0; i < _members.length; i++) {
-        _members[i] = _members[i].copyWith(isDefault: false);
+      for (var i = 0; i < members.length; i++) {
+        members[i] = members[i].copyWith(isDefault: false);
       }
     }
-
-    _members.add(created);
+    members.add(created);
     return created;
-  }
+  });
 
   @override
-  Future<FamilyMember> updateMember(FamilyMember member) async {
-    final index = _members.indexWhere((m) => m.id == member.id);
-    if (index == -1) {
-      throw Exception('Không tìm thấy thành viên để cập nhật.');
+  Future<FamilyMember> updateMember(FamilyMember member) => _change((members) {
+    final index = members.indexWhere((m) => m.id == member.id);
+    if (index < 0) throw StateError('Không tìm thấy thành viên để cập nhật.');
+    if (member.fullName.trim().isEmpty) {
+      throw ArgumentError('Vui lòng nhập họ tên.');
     }
-
-    if (member.isDefault) {
-      for (int i = 0; i < _members.length; i++) {
-        _members[i] = _members[i].copyWith(isDefault: false);
+    final existing = members[index];
+    if (existing.isSelf != member.isSelf) {
+      throw StateError(
+        'Không thể đổi hồ sơ bản thân thành người thân hoặc ngược lại.',
+      );
+    }
+    final updated = member.copyWith(
+      fullName: member.fullName.trim(),
+      createdAt: existing.createdAt,
+      updatedAt: DateTime.now(),
+    );
+    if (updated.isDefault) {
+      for (var i = 0; i < members.length; i++) {
+        members[i] = members[i].copyWith(isDefault: false);
       }
     }
-
-    final updated = member.copyWith(updatedAt: DateTime.now());
-    _members[index] = updated;
+    members[index] = updated;
     return updated;
-  }
+  });
 
   @override
-  Future<bool> deleteMember(String id) async {
-    final index = _members.indexWhere((m) => m.id == id);
-    if (index == -1) return false;
-
-    if (_members[index].isSelf) {
+  Future<bool> deleteMember(String id) => _change((members) {
+    final index = members.indexWhere((m) => m.id == id);
+    if (index < 0) return false;
+    if (members[index].isSelf) {
       throw Exception('Không thể xóa hồ sơ chính của Bản thân.');
     }
-
-    _members.removeAt(index);
+    final wasDefault = members[index].isDefault;
+    members.removeAt(index);
+    if (wasDefault && members.isNotEmpty) {
+      final fallback = members.indexWhere((m) => m.isSelf);
+      final target = fallback < 0 ? 0 : fallback;
+      members[target] = members[target].copyWith(isDefault: true);
+    }
     return true;
-  }
+  });
 
   @override
-  Future<FamilyMember> setDefaultMember(String memberId) async {
-    final index = _members.indexWhere((m) => m.id == memberId);
-    if (index == -1) {
-      throw Exception('Không tìm thấy thành viên.');
+  Future<FamilyMember> setDefaultMember(String memberId) => _change((members) {
+    final index = members.indexWhere((m) => m.id == memberId);
+    if (index < 0) throw StateError('Không tìm thấy thành viên.');
+    for (var i = 0; i < members.length; i++) {
+      members[i] = members[i].copyWith(isDefault: members[i].id == memberId);
     }
-
-    for (int i = 0; i < _members.length; i++) {
-      _members[i] = _members[i].copyWith(isDefault: _members[i].id == memberId);
-    }
-
-    return _members[index];
-  }
+    return members[index];
+  });
 }
 
 class RemoteFamilyRepository implements FamilyRepository {
-  RemoteFamilyRepository([
-    this._client,
-    LocalFamilyRepository? fallback,
-  ]) : _fallback = fallback ?? LocalFamilyRepository();
-
-  final ApiClient? _client;
-  final LocalFamilyRepository _fallback;
-
+  RemoteFamilyRepository(this._client);
+  final ApiClient _client;
   @override
   Future<List<FamilyMember>> getMembers({String? primaryPatientId}) async {
-    try {
-      if (_client != null) {
-        final res = await _client.get('/family/members');
-        if (res is Map<String, dynamic> && res['items'] is List) {
-          return (res['items'] as List)
-              .map((e) => FamilyMember.fromJson(e as Map<String, dynamic>))
-              .toList();
-        }
-      }
-    } catch (_) {
-      // Fallback local
-    }
-    return _fallback.getMembers(primaryPatientId: primaryPatientId);
+    final result = await _client.get('/family/members') as Map<String, dynamic>;
+    return (result['items'] as List)
+        .map((m) => FamilyMember.fromJson(m as Map<String, dynamic>))
+        .toList();
   }
 
   @override
-  Future<FamilyMember?> getMemberById(String id) async {
-    try {
-      if (_client != null) {
-        final res = await _client.get('/family/members/$id');
-        if (res is Map<String, dynamic>) {
-          return FamilyMember.fromJson(res);
-        }
-      }
-    } catch (_) {
-      // Fallback local
-    }
-    return _fallback.getMemberById(id);
-  }
-
+  Future<FamilyMember?> getMemberById(String id) async => FamilyMember.fromJson(
+    await _client.get('/family/members/${Uri.encodeComponent(id)}')
+        as Map<String, dynamic>,
+  );
   @override
-  Future<FamilyMember> createMember(FamilyMember member) async {
-    try {
-      if (_client != null) {
-        final res = await _client.post('/family/members', body: member.toJson());
-        if (res is Map<String, dynamic>) {
-          return FamilyMember.fromJson(res);
-        }
-      }
-    } catch (_) {
-      // Fallback local
-    }
-    return _fallback.createMember(member);
-  }
-
+  Future<FamilyMember> createMember(FamilyMember member) async =>
+      FamilyMember.fromJson(
+        await _client.post('/family/members', body: member.toJson())
+            as Map<String, dynamic>,
+      );
   @override
-  Future<FamilyMember> updateMember(FamilyMember member) async {
-    try {
-      if (_client != null) {
-        final res = await _client.patch('/family/members/${member.id}', body: member.toJson());
-        if (res is Map<String, dynamic>) {
-          return FamilyMember.fromJson(res);
-        }
-      }
-    } catch (_) {
-      // Fallback local
-    }
-    return _fallback.updateMember(member);
-  }
-
+  Future<FamilyMember> updateMember(FamilyMember member) async =>
+      FamilyMember.fromJson(
+        await _client.patch(
+          '/family/members/${Uri.encodeComponent(member.id)}',
+          body: member.toJson(),
+        ) as Map<String, dynamic>,
+      );
   @override
-  Future<bool> deleteMember(String id) async {
-    try {
-      if (_client != null) {
-        final res = await _client.delete('/family/members/$id');
-        if (res is Map<String, dynamic> && res['success'] == true) {
-          return true;
-        }
-      }
-    } catch (_) {
-      // Fallback local
-    }
-    return _fallback.deleteMember(id);
-  }
-
+  Future<bool> deleteMember(String id) async =>
+      (await _client.delete(
+        '/family/members/${Uri.encodeComponent(id)}',
+      ))['success'] ==
+      true;
   @override
-  Future<FamilyMember> setDefaultMember(String memberId) async {
-    try {
-      if (_client != null) {
-        final res = await _client.patch('/family/members/$memberId/default', body: {});
-        if (res is Map<String, dynamic>) {
-          return FamilyMember.fromJson(res);
-        }
-      }
-    } catch (_) {
-      // Fallback local
-    }
-    return _fallback.setDefaultMember(memberId);
-  }
+  Future<FamilyMember> setDefaultMember(String memberId) async =>
+      FamilyMember.fromJson(
+        await _client.patch(
+          '/family/members/${Uri.encodeComponent(memberId)}/default',
+          body: {},
+        ) as Map<String, dynamic>,
+      );
 }

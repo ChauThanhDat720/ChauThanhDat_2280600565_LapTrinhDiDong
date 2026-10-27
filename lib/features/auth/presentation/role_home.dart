@@ -1,12 +1,21 @@
+import '../../../core/config/aws_config.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/models/app_user.dart';
 import '../../doctors/presentation/doctor_dashboard_screen.dart';
 import '../../home/presentation/home_screen.dart';
 
-Widget homeForRole(UserRole role) => switch (role) {
+Widget homeForRole(UserRole role, {AppUser? user}) => switch (role) {
   UserRole.patient => const PatientHomeScreen(),
-  UserRole.doctor => const DoctorHomeScreen(),
+  UserRole.doctor =>
+    AwsConfig.useAws
+        ? DoctorDashboardScreen(
+            doctorId: user?.doctorId ?? user?.id ?? '',
+            doctorName: user?.fullName ?? 'Bác sĩ',
+            department: '',
+          )
+        : const DoctorHomeScreen(),
   UserRole.admin => const AdminDashboardScreen(),
   UserRole.unknown => const AccessDeniedScreen(),
 };

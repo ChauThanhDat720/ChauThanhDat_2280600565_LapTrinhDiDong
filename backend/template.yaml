@@ -1,123 +1,298 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Local-first AWS SAM blueprint for Smart Hospital. Do not deploy without review.
+Description: Smart Hospital - Cognito, REST API, Lambda, DynamoDB and private S3 attachments.
 
 Parameters:
-  CognitoUserPoolArn:
+  AllowedOrigin:
     Type: String
-    Description: ARN of the approved Cognito User Pool (supplied only at deployment time).
+    Default: http://localhost:5173
+    Description: Exact web origin allowed by CORS. Native Android/iOS do not require an Origin header.
 
 Globals:
   Function:
-    Runtime: nodejs22.x
-    CodeUri: src/
-    Timeout: 10
-    MemorySize: 256
-    Tracing: Active
-    Environment:
-      Variables:
-        LOG_LEVEL: INFO
+    Runtime: nodejs24.x
+    CodeUri: aws/
+    Timeout: 15
+    MemorySize: 512
+    Architectures: [arm64]
 
 Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      UserPoolName: !Sub '${AWS::StackName}-users'
+      UsernameAttributes: [email]
+      UsernameConfiguration: { CaseSensitive: false }
+      AutoVerifiedAttributes: [email]
+      AccountRecoverySetting:
+        RecoveryMechanisms: [{ Name: verified_email, Priority: 1 }]
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+      Schema:
+        - { Name: email, AttributeDataType: String, Required: true, Mutable: true }
+        - { Name: name, AttributeDataType: String, Required: true, Mutable: true }
+        - Name: doctorId
+          AttributeDataType: String
+          Mutable: true
+          StringAttributeConstraints: { MinLength: '1', MaxLength: '120' }
+      LambdaConfig:
+        PostConfirmation: !GetAtt PostConfirmationFunction.Arn
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows: [ALLOW_USER_SRP_AUTH, ALLOW_REFRESH_TOKEN_AUTH]
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      ReadAttributes: [email, email_verified, name, phone_number, 'custom:doctorId']
+      # Patients cannot assign their own doctor identity or role.
+      WriteAttributes: [email, name, phone_number]
+      AccessTokenValidity: 1
+      IdTokenValidity: 1
+      RefreshTokenValidity: 30
+      TokenValidityUnits: { AccessToken: hours, IdToken: hours, RefreshToken: days }
+
+  PatientGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { UserPoolId: !Ref UserPool, GroupName: patients }
+  DoctorGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { UserPoolId: !Ref UserPool, GroupName: doctors }
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { UserPoolId: !Ref UserPool, GroupName: admins }
+
+  RegistrationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+
+  PostConfirmationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/post_confirmation.handler
+      Role: !GetAtt RegistrationRole.Arn
+      Timeout: 5
+
+  # Separate policy avoids a UserPool -> Lambda -> role -> UserPool dependency cycle.
+  RegistrationGroupPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: AssignPatientGroup
+      Roles: [!Ref RegistrationRole]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: cognito-idp:AdminAddUserToGroup
+            Resource: !GetAtt UserPool.Arn
+  RegistrationInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PostConfirmationFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+      SourceAccount: !Ref AWS::AccountId
+
+  HospitalTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification: { SSEEnabled: true }
+      PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true }
+      AttributeDefinitions:
+        - { AttributeName: pk, AttributeType: S }
+        - { AttributeName: sk, AttributeType: S }
+        - { AttributeName: gsi1pk, AttributeType: S }
+        - { AttributeName: gsi1sk, AttributeType: S }
+        - { AttributeName: gsi2pk, AttributeType: S }
+        - { AttributeName: gsi2sk, AttributeType: S }
+      KeySchema:
+        - { AttributeName: pk, KeyType: HASH }
+        - { AttributeName: sk, KeyType: RANGE }
+      GlobalSecondaryIndexes:
+        - IndexName: gsi1
+          KeySchema:
+            - { AttributeName: gsi1pk, KeyType: HASH }
+            - { AttributeName: gsi1sk, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+        - IndexName: gsi2
+          KeySchema:
+            - { AttributeName: gsi2pk, KeyType: HASH }
+            - { AttributeName: gsi2sk, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+
+  AttachmentsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      OwnershipControls: { Rules: [{ ObjectOwnership: BucketOwnerEnforced }] }
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins: [!Ref AllowedOrigin]
+            AllowedMethods: [GET, PUT]
+            AllowedHeaders: ['Content-Type', 'x-amz-server-side-encryption', 'x-amz-checksum-crc32', 'x-amz-sdk-checksum-algorithm']
+            MaxAge: 300
+      LifecycleConfiguration:
+        Rules:
+          - Id: RemoveAbandonedMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 }
+  AttachmentsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AttachmentsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: [!GetAtt AttachmentsBucket.Arn, !Sub '${AttachmentsBucket.Arn}/*']
+            Condition: { Bool: { 'aws:SecureTransport': 'false' } }
+
   SmartHospitalApi:
     Type: AWS::Serverless::Api
     Properties:
       StageName: v1
       EndpointConfiguration: REGIONAL
+      Cors:
+        AllowOrigin: !Sub "'${AllowedOrigin}'"
+        AllowHeaders: "'Content-Type,Authorization,Idempotency-Key'"
+        AllowMethods: "'GET,POST,PATCH,DELETE,OPTIONS'"
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
+        AddDefaultAuthorizerToCorsPreflight: false
         Authorizers:
           CognitoAuthorizer:
-            UserPoolArn: !Ref CognitoUserPoolArn
+            UserPoolArn: !GetAtt UserPool.Arn
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          DataTraceEnabled: false
+          ThrottlingRateLimit: 20
+          ThrottlingBurstLimit: 40
+      GatewayResponses:
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers: { Access-Control-Allow-Origin: !Sub "'${AllowedOrigin}'" }
+        DEFAULT_5XX:
+          ResponseParameters:
+            Headers: { Access-Control-Allow-Origin: !Sub "'${AllowedOrigin}'" }
 
-  PatientsTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: cognitoUserId
-          AttributeType: S
-        - AttributeName: patientId
-          AttributeType: S
-      KeySchema:
-        - AttributeName: cognitoUserId
-          KeyType: HASH
-      GlobalSecondaryIndexes:
-        - IndexName: patientId-index
-          KeySchema:
-            - AttributeName: patientId
-              KeyType: HASH
-          Projection: { ProjectionType: KEYS_ONLY }
-
-  HealthFunction:
+  ApiFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: handlers/health.handler
+      Handler: src/handler.handler
+      Environment:
+        Variables:
+          HOSPITAL_TABLE: !Ref HospitalTable
+          ATTACHMENTS_BUCKET: !Ref AttachmentsBucket
+          COGNITO_APP_CLIENT_ID: !Ref UserPoolClient
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:Query, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:ConditionCheckItem]
+              Resource: [!GetAtt HospitalTable.Arn, !Sub '${HospitalTable.Arn}/index/*']
+            - Effect: Allow
+              Action: [s3:GetObject, s3:PutObject]
+              Resource: !Sub '${AttachmentsBucket.Arn}/consultations/*'
       Events:
         Health:
           Type: Api
-          Properties:
-            RestApiId: !Ref SmartHospitalApi
-            Path: /health
-            Method: get
-            Auth:
-              Authorizer: NONE
-
-  DepartmentFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: handlers/departments.list
-      Events:
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /health, Method: get, Auth: { Authorizer: NONE } }
         Departments:
           Type: Api
           Properties: { RestApiId: !Ref SmartHospitalApi, Path: /departments, Method: get, Auth: { Authorizer: NONE } }
-
-  DoctorFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: handlers/doctors.handler
-      Events:
         Doctors:
           Type: Api
           Properties: { RestApiId: !Ref SmartHospitalApi, Path: /doctors, Method: get, Auth: { Authorizer: NONE } }
-        DoctorById:
+        DoctorDetail:
           Type: Api
-          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /doctors/{id}, Method: get, Auth: { Authorizer: NONE } }
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: '/doctors/{doctorId}', Method: get, Auth: { Authorizer: NONE } }
+        DoctorAvailability:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: '/doctors/{doctorId}/availability', Method: get }
+        DoctorQueue:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: '/doctors/{doctorId}/queue', Method: get }
+        DoctorAppointments:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /doctors/me/appointments, Method: get }
+        Patients:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /patients/me, Method: any }
+        Appointments:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /appointments, Method: any }
+        AppointmentDetail:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: '/appointments/{id}', Method: any }
+        AppointmentActions:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: '/appointments/{id}/{action}', Method: any }
+        Family:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /family/members, Method: any }
+        FamilyDetail:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: '/family/members/{id}', Method: any }
+        FamilyDefault:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: '/family/members/{id}/default', Method: patch }
+        Consultations:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: '/teleconsultations/{category}/{id}', Method: any }
+        ConsultationActions:
+          Type: Api
+          Properties: { RestApiId: !Ref SmartHospitalApi, Path: '/teleconsultations/{category}/{id}/{action}', Method: any }
 
-  AppointmentFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: handlers/appointments.handler
-      Events:
-        ListAppointments:
-          Type: Api
-          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /appointments, Method: get }
-        CreateAppointment:
-          Type: Api
-          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /appointments, Method: post }
-        GetAppointment:
-          Type: Api
-          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /appointments/{id}, Method: get }
-        CancelAppointment:
-          Type: Api
-          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /appointments/{id}/cancel, Method: patch }
+  ApiLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: { LogGroupName: !Sub '/aws/lambda/${ApiFunction}', RetentionInDays: 14 }
+  RegistrationLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: { LogGroupName: !Sub '/aws/lambda/${PostConfirmationFunction}', RetentionInDays: 14 }
 
-  PatientFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: handlers/patients.handler
-      Policies:
-        - Statement:
-            Effect: Allow
-            Action:
-              - dynamodb:GetItem
-              - dynamodb:PutItem
-              - dynamodb:UpdateItem
-            Resource: !GetAtt PatientsTable.Arn
-      Events:
-        GetMe:
-          Type: Api
-          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /patients/me, Method: get }
-        UpdateMe:
-          Type: Api
-          Properties: { RestApiId: !Ref SmartHospitalApi, Path: /patients/me, Method: patch }
+Outputs:
+  ApiBaseUrl:
+    Value: !Sub 'https://${SmartHospitalApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/v1'
+  AwsRegion:
+    Value: !Ref AWS::Region
+  CognitoUserPoolId:
+    Value: !Ref UserPool
+  CognitoAppClientId:
+    Value: !Ref UserPoolClient
+  HospitalTableName:
+    Value: !Ref HospitalTable
+  AttachmentsBucketName:
+    Value: !Ref AttachmentsBucket

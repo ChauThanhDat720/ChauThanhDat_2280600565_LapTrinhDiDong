@@ -1,3 +1,5 @@
+import '../../../core/repositories/application_backend.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -10,18 +12,22 @@ class DoctorTeleconsultationsScreen extends StatefulWidget {
     super.key,
     this.doctorId = 'dr-linh',
     this.doctorName = 'BS. Trần Thảo Linh',
-    this.repository = const LocalTeleconsultationRepository(),
-  });
+    TeleconsultationRepository? repository,
+  }) : _providedRepository = repository;
 
   final String doctorId;
   final String doctorName;
-  final TeleconsultationRepository repository;
+  final TeleconsultationRepository? _providedRepository;
+  TeleconsultationRepository get repository =>
+      _providedRepository ?? ApplicationBackend.repositories.teleconsultations;
 
   @override
-  State<DoctorTeleconsultationsScreen> createState() => _DoctorTeleconsultationsScreenState();
+  State<DoctorTeleconsultationsScreen> createState() =>
+      _DoctorTeleconsultationsScreenState();
 }
 
-class _DoctorTeleconsultationsScreenState extends State<DoctorTeleconsultationsScreen> {
+class _DoctorTeleconsultationsScreenState
+    extends State<DoctorTeleconsultationsScreen> {
   bool _loading = true;
   List<TeleconsultationSession> _sessions = [];
   String _selectedFilter = 'all'; // 'all', 'needs_reply', 'active', 'closed'
@@ -76,9 +82,7 @@ class _DoctorTeleconsultationsScreenState extends State<DoctorTeleconsultationsS
     final filtered = _filteredSessions;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Tư vấn Y tế Hậu khám (7 ngày)'),
-      ),
+      appBar: AppBar(title: const Text('Tư vấn Y tế Hậu khám (7 ngày)')),
       body: Column(
         children: [
           // Filter Chips
@@ -118,43 +122,57 @@ class _DoctorTeleconsultationsScreenState extends State<DoctorTeleconsultationsS
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : filtered.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.chat_bubble_outline_rounded, size: 48, color: Colors.grey.shade400),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Không có ca tư vấn hậu khám nào trong mục này.',
-                              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                            ),
-                          ],
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.chat_bubble_outline_rounded,
+                          size: 48,
+                          color: Colors.grey.shade400,
                         ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _loadSessions,
-                        child: ListView.separated(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: filtered.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 12),
-                          itemBuilder: (ctx, index) {
-                            final session = filtered[index];
-                            return _buildSessionCard(session);
-                          },
+                        const SizedBox(height: 12),
+                        Text(
+                          'Không có ca tư vấn hậu khám nào trong mục này.',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 13,
+                          ),
                         ),
-                      ),
+                      ],
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _loadSessions,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 12),
+                      itemBuilder: (ctx, index) {
+                        final session = filtered[index];
+                        return _buildSessionCard(session);
+                      },
+                    ),
+                  ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterChip(String key, String label, {IconData? icon, Color? color}) {
+  Widget _buildFilterChip(
+    String key,
+    String label, {
+    IconData? icon,
+    Color? color,
+  }) {
     final isSelected = _selectedFilter == key;
     return ChoiceChip(
       selected: isSelected,
       onSelected: (_) => setState(() => _selectedFilter = key),
-      avatar: icon != null ? Icon(icon, size: 16, color: isSelected ? Colors.white : color) : null,
+      avatar: icon != null
+          ? Icon(icon, size: 16, color: isSelected ? Colors.white : color)
+          : null,
       label: Text(
         label,
         style: TextStyle(
@@ -205,7 +223,10 @@ class _DoctorTeleconsultationsScreenState extends State<DoctorTeleconsultationsS
                   CircleAvatar(
                     radius: 20,
                     backgroundColor: const Color(0xFFE0F2FE),
-                    child: const Icon(Icons.person_rounded, color: Color(0xFF0284C7)),
+                    child: const Icon(
+                      Icons.person_rounded,
+                      color: Color(0xFF0284C7),
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -216,12 +237,18 @@ class _DoctorTeleconsultationsScreenState extends State<DoctorTeleconsultationsS
                           children: [
                             Text(
                               session.patientName,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
                             ),
                             if (hasUnread) ...[
                               const SizedBox(width: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFDC2626),
                                   borderRadius: BorderRadius.circular(10),
@@ -240,7 +267,10 @@ class _DoctorTeleconsultationsScreenState extends State<DoctorTeleconsultationsS
                         ),
                         Text(
                           'Mã ca khám: ${session.appointmentId} • ${session.department}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
                         ),
                       ],
                     ),
@@ -251,7 +281,10 @@ class _DoctorTeleconsultationsScreenState extends State<DoctorTeleconsultationsS
               const SizedBox(height: 10),
               if (session.diagnosis?.isNotEmpty == true) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(8),
@@ -259,12 +292,19 @@ class _DoctorTeleconsultationsScreenState extends State<DoctorTeleconsultationsS
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.medical_information_outlined, size: 14, color: AppColors.primary),
+                      const Icon(
+                        Icons.medical_information_outlined,
+                        size: 14,
+                        color: AppColors.primary,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           'Chẩn đoán: ${session.diagnosis}',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -281,7 +321,9 @@ class _DoctorTeleconsultationsScreenState extends State<DoctorTeleconsultationsS
                     Icon(
                       Icons.chat_bubble_outline_rounded,
                       size: 14,
-                      color: hasUnread ? AppColors.primary : Colors.grey.shade500,
+                      color: hasUnread
+                          ? AppColors.primary
+                          : Colors.grey.shade500,
                     ),
                     const SizedBox(width: 6),
                     Expanded(
@@ -289,8 +331,12 @@ class _DoctorTeleconsultationsScreenState extends State<DoctorTeleconsultationsS
                         '${session.lastMessageSender != null ? "${session.lastMessageSender}: " : ""}${session.lastMessage}',
                         style: TextStyle(
                           fontSize: 12,
-                          color: hasUnread ? Colors.black87 : Colors.grey.shade700,
-                          fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
+                          color: hasUnread
+                              ? Colors.black87
+                              : Colors.grey.shade700,
+                          fontWeight: hasUnread
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,

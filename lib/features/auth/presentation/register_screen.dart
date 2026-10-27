@@ -129,9 +129,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       labelText: 'Create password',
                       prefixIcon: Icon(Icons.lock_outline),
                     ),
-                    validator: (v) => v == null || v.length < 8
-                        ? 'Use at least 8 characters'
-                        : null,
+                    validator: (v) {
+                      if (authRepository.isDemo) {
+                        return v == null || v.length < 8
+                            ? 'Use at least 8 characters'
+                            : null;
+                      }
+                      if (v == null ||
+                          v.length < 12 ||
+                          !RegExp(r'[A-Z]').hasMatch(v) ||
+                          !RegExp(r'[a-z]').hasMatch(v) ||
+                          !RegExp(r'[0-9]').hasMatch(v)) {
+                        return 'Dùng ít nhất 12 ký tự, gồm chữ hoa, chữ thường và số';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 12),
                   TextFormField(

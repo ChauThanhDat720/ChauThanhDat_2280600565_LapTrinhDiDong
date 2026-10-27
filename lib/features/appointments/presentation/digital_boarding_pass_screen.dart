@@ -1,3 +1,5 @@
+import '../../../core/repositories/application_backend.dart';
+
 import 'package:flutter/material.dart';
 import 'package:qr/qr.dart';
 
@@ -12,14 +14,17 @@ class DigitalBoardingPassScreen extends StatefulWidget {
   const DigitalBoardingPassScreen({
     super.key,
     required this.appointment,
-    this.repository = const LocalAppointmentRepository(),
-  });
+    AppointmentRepository? repository,
+  }) : _providedRepository = repository;
 
   final Appointment appointment;
-  final AppointmentRepository repository;
+  final AppointmentRepository? _providedRepository;
+  AppointmentRepository get repository =>
+      _providedRepository ?? ApplicationBackend.repositories.appointments;
 
   @override
-  State<DigitalBoardingPassScreen> createState() => _DigitalBoardingPassScreenState();
+  State<DigitalBoardingPassScreen> createState() =>
+      _DigitalBoardingPassScreenState();
 }
 
 class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
@@ -35,7 +40,9 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
   Future<void> _checkIn() async {
     setState(() => _checkingIn = true);
     try {
-      final updated = await widget.repository.checkinAppointment(_appointment.id);
+      final updated = await widget.repository.checkinAppointment(
+        _appointment.id,
+      );
       if (mounted) {
         setState(() {
           _appointment = updated;
@@ -104,12 +111,17 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: isCheckedIn
-                                ? [const Color(0xFF0D9488), const Color(0xFF059669)]
+                                ? [
+                                    const Color(0xFF0D9488),
+                                    const Color(0xFF059669),
+                                  ]
                                 : [AppColors.primary, const Color(0xFF1D4ED8)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(20),
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -153,7 +165,10 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.25),
                                 borderRadius: BorderRadius.circular(20),
@@ -180,12 +195,16 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                             if (isCheckedIn) ...[
                               Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF0D9488).withValues(alpha: 0.08),
+                                  color: const Color(0xFF0D9488)
+                                      .withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
-                                    color: const Color(0xFF0D9488).withValues(alpha: 0.25),
+                                    color: const Color(0xFF0D9488)
+                                        .withValues(alpha: 0.25),
                                   ),
                                 ),
                                 child: Column(
@@ -211,7 +230,8 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      _appointment.roomNumber ?? route.clinicRoom,
+                                      _appointment.roomNumber ??
+                                          route.clinicRoom,
                                       style: const TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.bold,
@@ -221,7 +241,10 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                                     const SizedBox(height: 2),
                                     const Text(
                                       'Vui lòng theo dõi màn hình hiển thị phòng chờ',
-                                      style: TextStyle(fontSize: 11, color: AppColors.mutedText),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.mutedText,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -230,28 +253,47 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                             ],
 
                             // Patient & Doctor Information Rows
-                            _infoRow('Bệnh nhân:', _appointment.patientName, isBold: true),
+                            _infoRow(
+                              'Bệnh nhân:',
+                              _appointment.patientName,
+                              isBold: true,
+                            ),
                             const SizedBox(height: 10),
                             _infoRow('Mã ca khám:', _appointment.id),
                             const SizedBox(height: 10),
-                            _infoRow('Bác sĩ phụ trách:', _appointment.doctorName, isBold: true),
+                            _infoRow(
+                              'Bác sĩ phụ trách:',
+                              _appointment.doctorName,
+                              isBold: true,
+                            ),
                             const SizedBox(height: 10),
-                            _infoRow('Khoa khám:', '${_appointment.department} - ${_appointment.specialty}'),
+                            _infoRow(
+                              'Khoa khám:',
+                              '${_appointment.department} - ${_appointment.specialty}',
+                            ),
                             const SizedBox(height: 10),
-                            _infoRow('Thời gian hẹn:', '${_appointment.dateLabel} lúc ${_appointment.time}'),
+                            _infoRow(
+                              'Thời gian hẹn:',
+                              '${_appointment.dateLabel} lúc ${_appointment.time}',
+                            ),
                             const SizedBox(height: 10),
                             ListenableBuilder(
                               listenable: ClinicalIntakeStore.instance,
                               builder: (context, _) {
-                                final intake = ClinicalIntakeStore.instance.getByAppointmentId(_appointment.id);
+                                final intake = ClinicalIntakeStore.instance
+                                    .getByAppointmentId(_appointment.id);
                                 return InkWell(
                                   onTap: () async {
                                     await Navigator.of(context).push(
                                       MaterialPageRoute(
                                         builder: (_) => PreVisitIntakeScreen(
                                           appointment: _appointment,
-                                          repository: widget.repository is RemoteAppointmentRepository
-                                              ? const RemoteClinicalIntakeRepository()
+                                          repository:
+                                              widget.repository
+                                                  is RemoteAppointmentRepository
+                                              ? ApplicationBackend
+                                                    .repositories
+                                                    .clinicalIntake
                                               : const LocalClinicalIntakeRepository(),
                                         ),
                                       ),
@@ -259,20 +301,32 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                                     setState(() {});
                                   },
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 8,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: intake != null ? const Color(0xFFF0FDF4) : const Color(0xFFFEF3C7),
+                                      color: intake != null
+                                          ? const Color(0xFFF0FDF4)
+                                          : const Color(0xFFFEF3C7),
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: intake != null ? const Color(0xFF86EFAC) : const Color(0xFFFCD34D),
+                                        color: intake != null
+                                            ? const Color(0xFF86EFAC)
+                                            : const Color(0xFFFCD34D),
                                       ),
                                     ),
                                     child: Row(
                                       children: [
                                         Icon(
-                                          intake != null ? Icons.assignment_turned_in_rounded : Icons.edit_note_rounded,
+                                          intake != null
+                                              ? Icons
+                                                    .assignment_turned_in_rounded
+                                              : Icons.edit_note_rounded,
                                           size: 16,
-                                          color: intake != null ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                                          color: intake != null
+                                              ? const Color(0xFF16A34A)
+                                              : const Color(0xFFD97706),
                                         ),
                                         const SizedBox(width: 8),
                                         Expanded(
@@ -283,14 +337,18 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                                             style: TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.bold,
-                                              color: intake != null ? const Color(0xFF166534) : const Color(0xFF92400E),
+                                              color: intake != null
+                                                  ? const Color(0xFF166534)
+                                                  : const Color(0xFF92400E),
                                             ),
                                           ),
                                         ),
                                         Icon(
                                           Icons.chevron_right_rounded,
                                           size: 16,
-                                          color: intake != null ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                                          color: intake != null
+                                              ? const Color(0xFF16A34A)
+                                              : const Color(0xFFD97706),
                                         ),
                                       ],
                                     ),
@@ -309,7 +367,9 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                                   child: Container(
                                     height: 1.5,
                                     color: Colors.grey.shade300,
-                                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                                    margin: const EdgeInsets.symmetric(
+                                      horizontal: 2,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -347,8 +407,12 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: isCheckedIn ? const Color(0xFF0D9488) : AppColors.mutedText,
-                                fontWeight: isCheckedIn ? FontWeight.bold : FontWeight.normal,
+                                color: isCheckedIn
+                                    ? const Color(0xFF0D9488)
+                                    : AppColors.mutedText,
+                                fontWeight: isCheckedIn
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
                             ),
                           ],
@@ -371,12 +435,20 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                         ? const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
                           )
                         : const Icon(Icons.qr_code_scanner_rounded),
                     label: Text(
-                      _checkingIn ? 'Đang tiếp đón...' : 'Mô phỏng Quét Check-in Ngay',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      _checkingIn
+                          ? 'Đang tiếp đón...'
+                          : 'Mô phỏng Quét Check-in Ngay',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     onPressed: _checkingIn ? null : _checkIn,
                   ),
@@ -407,10 +479,7 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
           width: 125,
           child: Text(
             label,
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.mutedText,
-            ),
+            style: const TextStyle(fontSize: 13, color: AppColors.mutedText),
           ),
         ),
         Expanded(
@@ -583,9 +652,7 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
   Widget _buildNavigationStepItem(NavigationStep step, {required bool isLast}) {
     final statusColor = step.isDone
         ? const Color(0xFF16A34A)
-        : (step.isCurrent
-            ? const Color(0xFF0D9488)
-            : const Color(0xFF94A3B8));
+        : (step.isCurrent ? const Color(0xFF0D9488) : const Color(0xFF94A3B8));
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -672,7 +739,10 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                 ),
                 const SizedBox(height: 3),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(6),
@@ -761,7 +831,12 @@ class _QrCanvasPainter extends CustomPainter {
       for (var y = 0; y < image.moduleCount; y++) {
         if (image.isDark(y, x)) {
           canvas.drawRect(
-            Rect.fromLTWH(x * squareSize, y * squareSize, squareSize, squareSize),
+            Rect.fromLTWH(
+              x * squareSize,
+              y * squareSize,
+              squareSize,
+              squareSize,
+            ),
             paint,
           );
         }
@@ -783,7 +858,8 @@ class _HospitalFloorMapSheet extends StatefulWidget {
 
 class _HospitalFloorMapSheetState extends State<_HospitalFloorMapSheet> {
   late int _selectedFloorLevel;
-  final List<HospitalFloorPlan> _plans = HospitalNavigationResolver.getFloorPlans();
+  final List<HospitalFloorPlan> _plans =
+      HospitalNavigationResolver.getFloorPlans();
 
   @override
   void initState() {
@@ -828,7 +904,11 @@ class _HospitalFloorMapSheetState extends State<_HospitalFloorMapSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                const Icon(Icons.map_rounded, color: Color(0xFF0D9488), size: 24),
+                const Icon(
+                  Icons.map_rounded,
+                  color: Color(0xFF0D9488),
+                  size: 24,
+                ),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Column(
@@ -844,7 +924,10 @@ class _HospitalFloorMapSheetState extends State<_HospitalFloorMapSheet> {
                       ),
                       Text(
                         'Định vị phòng khám & các khoa phòng theo thời gian thực',
-                        style: TextStyle(fontSize: 11, color: AppColors.mutedText),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.mutedText,
+                        ),
                       ),
                     ],
                   ),
@@ -865,28 +948,42 @@ class _HospitalFloorMapSheetState extends State<_HospitalFloorMapSheet> {
             child: Row(
               children: _plans.map((plan) {
                 final isSelected = plan.floorLevel == _selectedFloorLevel;
-                final isDoctorFloor = (widget.route.floor.contains('1') && plan.floorLevel == 1) ||
-                    (widget.route.floor.contains('2') && plan.floorLevel == 2) ||
-                    (widget.route.floor.contains('3') && plan.floorLevel == 3) ||
-                    (widget.route.floor.contains('trệt') && plan.floorLevel == 0);
+                final isDoctorFloor =
+                    (widget.route.floor.contains('1') &&
+                        plan.floorLevel == 1) ||
+                    (widget.route.floor.contains('2') &&
+                        plan.floorLevel == 2) ||
+                    (widget.route.floor.contains('3') &&
+                        plan.floorLevel == 3) ||
+                    (widget.route.floor.contains('trệt') &&
+                        plan.floorLevel == 0);
 
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
                     avatar: isDoctorFloor
-                        ? const Icon(Icons.star_rounded, size: 16, color: Colors.amber)
+                        ? const Icon(
+                            Icons.star_rounded,
+                            size: 16,
+                            color: Colors.amber,
+                          )
                         : null,
                     label: Text(
                       plan.floorName.split(' (').first,
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                       ),
                     ),
                     selected: isSelected,
-                    selectedColor: const Color(0xFF0D9488).withValues(alpha: 0.18),
+                    selectedColor: const Color(0xFF0D9488)
+                        .withValues(alpha: 0.18),
                     onSelected: (val) {
-                      if (val) setState(() => _selectedFloorLevel = plan.floorLevel);
+                      if (val) {
+                        setState(() => _selectedFloorLevel = plan.floorLevel);
+                      }
                     },
                   ),
                 );
@@ -906,12 +1003,19 @@ class _HospitalFloorMapSheetState extends State<_HospitalFloorMapSheet> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.layers_outlined, size: 16, color: Color(0xFF64748B)),
+                const Icon(
+                  Icons.layers_outlined,
+                  size: 16,
+                  color: Color(0xFF64748B),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     currentPlan.description,
-                    style: const TextStyle(fontSize: 11.5, color: Color(0xFF475569)),
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: Color(0xFF475569),
+                    ),
                   ),
                 ),
               ],
@@ -966,13 +1070,18 @@ class _HospitalFloorMapSheetState extends State<_HospitalFloorMapSheet> {
               const SizedBox(width: 8),
               Text(
                 wing.wingName,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: Color(0xFF0F172A),
+                ),
               ),
             ],
           ),
           const Divider(height: 14),
           ...wing.rooms.map((room) {
-            final isDoctorRoom = room.doctorId == widget.route.doctorId ||
+            final isDoctorRoom =
+                room.doctorId == widget.route.doctorId ||
                 widget.route.clinicRoom.contains(room.roomCode);
 
             return Container(
@@ -982,10 +1091,10 @@ class _HospitalFloorMapSheetState extends State<_HospitalFloorMapSheet> {
                 color: isDoctorRoom
                     ? const Color(0xFFCCFBF1)
                     : (room.category == 'lab'
-                        ? const Color(0xFFF0FDF4)
-                        : (room.category == 'pharmacy'
-                            ? const Color(0xFFEFF6FF)
-                            : const Color(0xFFF8FAFC))),
+                          ? const Color(0xFFF0FDF4)
+                          : (room.category == 'pharmacy'
+                                ? const Color(0xFFEFF6FF)
+                                : const Color(0xFFF8FAFC))),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: isDoctorRoom
@@ -1000,12 +1109,14 @@ class _HospitalFloorMapSheetState extends State<_HospitalFloorMapSheet> {
                     room.category == 'pharmacy'
                         ? Icons.local_pharmacy_rounded
                         : (room.category == 'lab'
-                            ? Icons.science_outlined
-                            : (room.category == 'reception'
-                                ? Icons.support_agent_rounded
-                                : Icons.meeting_room_rounded)),
+                              ? Icons.science_outlined
+                              : (room.category == 'reception'
+                                    ? Icons.support_agent_rounded
+                                    : Icons.meeting_room_rounded)),
                     size: 20,
-                    color: isDoctorRoom ? const Color(0xFF0F766E) : const Color(0xFF64748B),
+                    color: isDoctorRoom
+                        ? const Color(0xFF0F766E)
+                        : const Color(0xFF64748B),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -1019,20 +1130,29 @@ class _HospitalFloorMapSheetState extends State<_HospitalFloorMapSheet> {
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12.5,
-                                color: isDoctorRoom ? const Color(0xFF0F766E) : const Color(0xFF1E293B),
+                                color: isDoctorRoom
+                                    ? const Color(0xFF0F766E)
+                                    : const Color(0xFF1E293B),
                               ),
                             ),
                             if (isDoctorRoom) ...[
                               const SizedBox(width: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF0D9488),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: const Text(
                                   'ĐÍCH ĐẾN CỦA BẠN',
-                                  style: TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ],
@@ -1042,8 +1162,12 @@ class _HospitalFloorMapSheetState extends State<_HospitalFloorMapSheet> {
                           room.name,
                           style: TextStyle(
                             fontSize: 12,
-                            fontWeight: isDoctorRoom ? FontWeight.w600 : FontWeight.normal,
-                            color: isDoctorRoom ? const Color(0xFF0F766E) : const Color(0xFF475569),
+                            fontWeight: isDoctorRoom
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: isDoctorRoom
+                                ? const Color(0xFF0F766E)
+                                : const Color(0xFF475569),
                           ),
                         ),
                       ],

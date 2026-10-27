@@ -25,9 +25,12 @@ class FamilyProfileManager extends ChangeNotifier {
     try {
       final items = await repository.getMembers();
       _members = items;
-      if (_activeMember == null || !_members.any((m) => m.id == _activeMember!.id)) {
+      if (_activeMember == null ||
+          !_members.any((m) => m.id == _activeMember!.id)) {
         final def = _members.where((m) => m.isDefault);
-        _activeMember = def.isNotEmpty ? def.first : (_members.isNotEmpty ? _members.first : null);
+        _activeMember = def.isNotEmpty
+            ? def.first
+            : (_members.isNotEmpty ? _members.first : null);
       } else {
         _activeMember = _members.firstWhere((m) => m.id == _activeMember!.id);
       }
@@ -46,13 +49,21 @@ class FamilyProfileManager extends ChangeNotifier {
     }
   }
 
-  void updateMemberList(List<FamilyMember> updatedList, {FamilyMember? newActive}) {
-    _members = updatedList;
-    if (newActive != null) {
-      _activeMember = newActive;
-    } else if (_activeMember != null && !_members.any((m) => m.id == _activeMember!.id)) {
-      _activeMember = _members.isNotEmpty ? _members.first : null;
-    }
+  void updateMemberList(
+    List<FamilyMember> updatedList, {
+    FamilyMember? newActive,
+  }) {
+    final activeId = newActive?.id ?? _activeMember?.id;
+    _members = List.of(updatedList);
+    final selected = _members.where((m) => m.id == activeId);
+    final defaults = _members.where((m) => m.isDefault);
+    _activeMember = selected.isNotEmpty
+        ? selected.first
+        : defaults.isNotEmpty
+        ? defaults.first
+        : _members.isNotEmpty
+        ? _members.first
+        : null;
     notifyListeners();
   }
 }

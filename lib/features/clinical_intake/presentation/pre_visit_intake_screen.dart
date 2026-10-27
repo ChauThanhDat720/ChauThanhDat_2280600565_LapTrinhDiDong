@@ -1,3 +1,5 @@
+import '../../../core/repositories/application_backend.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -10,11 +12,13 @@ class PreVisitIntakeScreen extends StatefulWidget {
   const PreVisitIntakeScreen({
     super.key,
     required this.appointment,
-    this.repository = const RemoteClinicalIntakeRepository(),
-  });
+    ClinicalIntakeRepository? repository,
+  }) : _providedRepository = repository;
 
   final Appointment appointment;
-  final ClinicalIntakeRepository repository;
+  final ClinicalIntakeRepository? _providedRepository;
+  ClinicalIntakeRepository get repository =>
+      _providedRepository ?? ApplicationBackend.repositories.clinicalIntake;
 
   @override
   State<PreVisitIntakeScreen> createState() => _PreVisitIntakeScreenState();
@@ -72,7 +76,9 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
   @override
   void initState() {
     super.initState();
-    final existing = ClinicalIntakeStore.instance.getByAppointmentId(widget.appointment.id);
+    final existing = ClinicalIntakeStore.instance.getByAppointmentId(
+      widget.appointment.id,
+    );
 
     _chiefComplaintController = TextEditingController(
       text: existing?.chiefComplaint.isNotEmpty == true
@@ -80,12 +86,15 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
           : widget.appointment.reason,
     );
     _notesController = TextEditingController(text: existing?.notes ?? '');
-    _currentMedicationsController =
-        TextEditingController(text: existing?.currentMedications ?? '');
-    _medicalHistoryController =
-        TextEditingController(text: existing?.medicalHistory ?? '');
-    _knownAllergiesController =
-        TextEditingController(text: existing?.knownAllergies ?? '');
+    _currentMedicationsController = TextEditingController(
+      text: existing?.currentMedications ?? '',
+    );
+    _medicalHistoryController = TextEditingController(
+      text: existing?.medicalHistory ?? '',
+    );
+    _knownAllergiesController = TextEditingController(
+      text: existing?.knownAllergies ?? '',
+    );
 
     if (existing != null) {
       _painLevel = existing.painLevel;
@@ -208,12 +217,18 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFF0FDFA),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: const Color(0xFF0D9488).withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.assignment_turned_in_rounded, color: Color(0xFF0D9488), size: 24),
+                    const Icon(
+                      Icons.assignment_turned_in_rounded,
+                      color: Color(0xFF0D9488),
+                      size: 24,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -230,7 +245,11 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                           const SizedBox(height: 4),
                           Text(
                             'Điền thông tin này giúp Bác sĩ ${widget.appointment.doctorName} nắm trước bệnh sử trong 30 giây, dành toàn bộ thời gian khám để chẩn đoán chuyên sâu.',
-                            style: const TextStyle(fontSize: 12.5, color: Color(0xFF134E4A), height: 1.35),
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: Color(0xFF134E4A),
+                              height: 1.35,
+                            ),
                           ),
                         ],
                       ),
@@ -254,7 +273,9 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                   hintText: 'Mô tả ngắn gọn cảm giác khó chịu nhất hiện tại của bạn...',
                   filled: true,
                   fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 validator: (val) {
                   if (val == null || val.trim().isEmpty) {
@@ -267,19 +288,30 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
-                children: [
-                  'Đau thắt ngực trái',
-                  'Khó thở hụt hơi',
-                  'Đau đầu dữ dội',
-                  'Đau vùng thượng vị',
-                  'Chóng mặt hoa mắt',
-                ].map((s) => ActionChip(
-                  label: Text(s, style: const TextStyle(fontSize: 11.5)),
-                  onPressed: () {
-                    final curr = _chiefComplaintController.text.trim();
-                    _chiefComplaintController.text = curr.isEmpty ? s : '$curr, $s';
-                  },
-                )).toList(),
+                children:
+                    [
+                          'Đau thắt ngực trái',
+                          'Khó thở hụt hơi',
+                          'Đau đầu dữ dội',
+                          'Đau vùng thượng vị',
+                          'Chóng mặt hoa mắt',
+                        ]
+                        .map(
+                          (s) => ActionChip(
+                            label: Text(
+                              s,
+                              style: const TextStyle(fontSize: 11.5),
+                            ),
+                            onPressed: () {
+                              final curr = _chiefComplaintController.text
+                                  .trim();
+                              _chiefComplaintController.text = curr.isEmpty
+                                  ? s
+                                  : '$curr, $s';
+                            },
+                          ),
+                        )
+                        .toList(),
               ),
               const SizedBox(height: 20),
 
@@ -300,7 +332,9 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                     selectedColor: AppColors.primary.withValues(alpha: 0.15),
                     labelStyle: TextStyle(
                       color: selected ? AppColors.primary : AppColors.text,
-                      fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: selected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                     onSelected: (val) {
                       if (val) setState(() => _painLocation = loc);
@@ -326,8 +360,12 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                     selected: selected,
                     selectedColor: const Color(0xFFE0F2FE),
                     labelStyle: TextStyle(
-                      color: selected ? const Color(0xFF0369A1) : AppColors.text,
-                      fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                      color: selected
+                          ? const Color(0xFF0369A1)
+                          : AppColors.text,
+                      fontWeight: selected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                     onSelected: (val) {
                       if (val) setState(() => _onsetDuration = dur);
@@ -348,7 +386,10 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: painColor.withValues(alpha: 0.4), width: 1.5),
+                  border: Border.all(
+                    color: painColor.withValues(alpha: 0.4),
+                    width: 1.5,
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: painColor.withValues(alpha: 0.06),
@@ -380,7 +421,10 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                             ),
                             Text(
                               _getPainSeverity(_painLevel),
-                              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
                             ),
                           ],
                         ),
@@ -410,8 +454,20 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('1: Hầu như không đau', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                          Text('10: Cực kỳ dữ dội', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                          Text(
+                            '1: Hầu như không đau',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                          Text(
+                            '10: Cực kỳ dữ dội',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -438,7 +494,9 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                     checkmarkColor: AppColors.primary,
                     labelStyle: TextStyle(
                       color: isSelected ? AppColors.primary : AppColors.text,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                     onSelected: (selected) {
                       setState(() {
@@ -467,26 +525,39 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                   hintText: 'Tên thuốc, thực phẩm chức năng đang dùng (Ví dụ: Panadol, thuốc huyết áp, vitamin...)',
                   filled: true,
                   fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
-                children: [
-                  'Không uống thuốc gì',
-                  'Panadol / Paracetamol',
-                  'Thuốc hạ huyết áp',
-                  'Thuốc tiểu đường',
-                  'Thực phẩm chức năng',
-                ].map((s) => ActionChip(
-                  label: Text(s, style: const TextStyle(fontSize: 11.5)),
-                  onPressed: () {
-                    final curr = _currentMedicationsController.text.trim();
-                    _currentMedicationsController.text = curr.isEmpty ? s : '$curr, $s';
-                  },
-                )).toList(),
+                children:
+                    [
+                          'Không uống thuốc gì',
+                          'Panadol / Paracetamol',
+                          'Thuốc hạ huyết áp',
+                          'Thuốc tiểu đường',
+                          'Thực phẩm chức năng',
+                        ]
+                        .map(
+                          (s) => ActionChip(
+                            label: Text(
+                              s,
+                              style: const TextStyle(fontSize: 11.5),
+                            ),
+                            onPressed: () {
+                              final curr = _currentMedicationsController.text
+                                  .trim();
+                              _currentMedicationsController.text = curr.isEmpty
+                                  ? s
+                                  : '$curr, $s';
+                            },
+                          ),
+                        )
+                        .toList(),
               ),
               const SizedBox(height: 20),
 
@@ -503,7 +574,9 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                   hintText: 'Bệnh nền (Ví dụ: Tăng huyết áp 2 năm, tiểu đường type 2, tiền sử mổ ruột thừa...)',
                   filled: true,
                   fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -527,7 +600,11 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                   children: [
                     const Text(
                       '⚠️ Cực kỳ quan trọng: Giúp Bác sĩ tránh kê đơn các hoạt chất gây dị ứng nguy hiểm.',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF991B1B), fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF991B1B),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
@@ -537,24 +614,34 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                         hintText: 'Ví dụ: Dị ứng Penicillin (nổi mẩn ngứa), dị ứng Aspirin, dị ứng hải sản...',
                         filled: true,
                         fillColor: Colors.white,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 6),
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
-                      children: [
-                        'Không có tiền sử dị ứng thuốc',
-                        'Dị ứng Penicillin / Amoxicillin',
-                        'Dị ứng Aspirin / NSAIDs',
-                        'Dị ứng thức ăn / Hải sản',
-                      ].map((s) => ActionChip(
-                        label: Text(s, style: const TextStyle(fontSize: 11.5)),
-                        onPressed: () {
-                          _knownAllergiesController.text = s;
-                        },
-                      )).toList(),
+                      children:
+                          [
+                                'Không có tiền sử dị ứng thuốc',
+                                'Dị ứng Penicillin / Amoxicillin',
+                                'Dị ứng Aspirin / NSAIDs',
+                                'Dị ứng thức ăn / Hải sản',
+                              ]
+                              .map(
+                                (s) => ActionChip(
+                                  label: Text(
+                                    s,
+                                    style: const TextStyle(fontSize: 11.5),
+                                  ),
+                                  onPressed: () {
+                                    _knownAllergiesController.text = s;
+                                  },
+                                ),
+                              )
+                              .toList(),
                     ),
                   ],
                 ),
@@ -571,10 +658,13 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                 controller: _notesController,
                 maxLines: 2,
                 decoration: InputDecoration(
-                  hintText: 'Những thắc mắc hoặc điều bạn muốn Bác sĩ lưu ý thêm...',
+                  hintText:
+                      'Những thắc mắc hoặc điều bạn muốn Bác sĩ lưu ý thêm...',
                   filled: true,
                   fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
               const SizedBox(height: 28),
@@ -587,18 +677,31 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   icon: _submitting
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
                         )
-                      : const Icon(Icons.check_circle_outline_rounded, size: 22),
+                      : const Icon(
+                          Icons.check_circle_outline_rounded,
+                          size: 22,
+                        ),
                   label: Text(
-                    _submitting ? 'Đang lưu phiếu...' : 'Xác Nhận & Gửi Cho Bác Sĩ',
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    _submitting
+                        ? 'Đang lưu phiếu...'
+                        : 'Xác Nhận & Gửi Cho Bác Sĩ',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   onPressed: _submitting ? null : _submit,
                 ),
@@ -631,7 +734,9 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: effectiveColor == const Color(0xFFDC2626) ? effectiveColor : AppColors.text,
+                    color: effectiveColor == const Color(0xFFDC2626)
+                        ? effectiveColor
+                        : AppColors.text,
                   ),
                 ),
               ),
@@ -639,7 +744,11 @@ class _PreVisitIntakeScreenState extends State<PreVisitIntakeScreen> {
                 const SizedBox(width: 4),
                 const Text(
                   '*',
-                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
               ],
             ],

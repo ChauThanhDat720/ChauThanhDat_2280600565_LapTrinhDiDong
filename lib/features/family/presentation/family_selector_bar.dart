@@ -1,3 +1,5 @@
+import '../../../core/repositories/application_backend.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -7,11 +9,7 @@ import 'family_members_screen.dart';
 import 'family_profile_manager.dart';
 
 class FamilySelectorBar extends StatefulWidget {
-  const FamilySelectorBar({
-    super.key,
-    this.repository,
-    this.onMemberChanged,
-  });
+  const FamilySelectorBar({super.key, this.repository, this.onMemberChanged});
 
   final FamilyRepository? repository;
   final ValueChanged<FamilyMember>? onMemberChanged;
@@ -22,12 +20,32 @@ class FamilySelectorBar extends StatefulWidget {
 
 class _FamilySelectorBarState extends State<FamilySelectorBar> {
   late FamilyRepository _repository;
+  bool _selecting = false;
 
   @override
   void initState() {
     super.initState();
-    _repository = widget.repository ?? LocalFamilyRepository();
+    _repository = widget.repository ?? ApplicationBackend.repositories.family;
     FamilyProfileManager.instance.loadMembers(_repository);
+  }
+
+  Future<void> _selectMember(FamilyMember member) async {
+    if (_selecting) return;
+    setState(() => _selecting = true);
+    try {
+      final saved = await _repository.setDefaultMember(member.id);
+      final members = await _repository.getMembers();
+      FamilyProfileManager.instance.updateMemberList(members, newActive: saved);
+      widget.onMemberChanged?.call(saved);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể lưu hồ sơ đã chọn: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _selecting = false);
+    }
   }
 
   @override
@@ -58,25 +76,37 @@ class _FamilySelectorBarState extends State<FamilySelectorBar> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.family_restroom_rounded, size: 20, color: AppColors.primary),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Đang xem hồ sơ: ${active?.fullName ?? "Bản thân"}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          color: Color(0xFF0F172A),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.family_restroom_rounded,
+                          size: 20,
+                          color: AppColors.primary,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Đang xem hồ sơ: ${active?.fullName ?? "Bản thân"}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   InkWell(
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => FamilyMembersScreen(repository: _repository),
+                          builder: (_) =>
+                              FamilyMembersScreen(repository: _repository),
                         ),
                       );
                     },
@@ -101,13 +131,15 @@ class _FamilySelectorBarState extends State<FamilySelectorBar> {
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: InkWell(
-                          onTap: () {
-                            FamilyProfileManager.instance.switchMember(member);
-                            widget.onMemberChanged?.call(member);
-                          },
+                          onTap: _selecting
+                              ? null
+                              : () => _selectMember(member),
                           borderRadius: BorderRadius.circular(24),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? AppColors.primary
@@ -126,11 +158,15 @@ class _FamilySelectorBarState extends State<FamilySelectorBar> {
                                   radius: 12,
                                   backgroundColor: isSelected
                                       ? Colors.white.withValues(alpha: 0.25)
-                                      : member.avatarColor.withValues(alpha: 0.15),
+                                      : member.avatarColor.withValues(
+                                          alpha: 0.15,
+                                        ),
                                   child: Icon(
                                     member.relationshipIcon,
                                     size: 14,
-                                    color: isSelected ? Colors.white : member.avatarColor,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : member.avatarColor,
                                   ),
                                 ),
                                 const SizedBox(width: 6),
@@ -138,13 +174,21 @@ class _FamilySelectorBarState extends State<FamilySelectorBar> {
                                   member.isSelf ? 'Bản thân' : member.fullName,
                                   style: TextStyle(
                                     fontSize: 12.5,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                    color: isSelected ? Colors.white : const Color(0xFF334155),
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.w500,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : const Color(0xFF334155),
                                   ),
                                 ),
                                 if (isSelected) ...[
                                   const SizedBox(width: 4),
-                                  const Icon(Icons.check_rounded, size: 14, color: Colors.white),
+                                  const Icon(
+                                    Icons.check_rounded,
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
                                 ],
                               ],
                             ),
@@ -157,13 +201,17 @@ class _FamilySelectorBarState extends State<FamilySelectorBar> {
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => FamilyMembersScreen(repository: _repository),
+                            builder: (_) =>
+                                FamilyMembersScreen(repository: _repository),
                           ),
                         );
                       },
                       borderRadius: BorderRadius.circular(24),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFEFF6FF),
                           borderRadius: BorderRadius.circular(24),
@@ -172,7 +220,11 @@ class _FamilySelectorBarState extends State<FamilySelectorBar> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.add_rounded, size: 16, color: Color(0xFF2563EB)),
+                            Icon(
+                              Icons.add_rounded,
+                              size: 16,
+                              color: Color(0xFF2563EB),
+                            ),
                             SizedBox(width: 4),
                             Text(
                               'Thêm',

@@ -1,3 +1,6 @@
+import '../../../core/config/aws_config.dart';
+import '../../../core/repositories/application_backend.dart';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -37,10 +40,13 @@ import '../../vaccination/presentation/vaccination_passport_screen.dart';
 class PatientHomeScreen extends StatefulWidget {
   const PatientHomeScreen({
     super.key,
-    this.appointmentRepository = const LocalAppointmentRepository(),
-  });
+    AppointmentRepository? appointmentRepository,
+  }) : _providedAppointmentRepository = appointmentRepository;
 
-  final AppointmentRepository appointmentRepository;
+  final AppointmentRepository? _providedAppointmentRepository;
+  AppointmentRepository get appointmentRepository =>
+      _providedAppointmentRepository ??
+      ApplicationBackend.repositories.appointments;
 
   @override
   State<PatientHomeScreen> createState() => _PatientHomeScreenState();
@@ -61,7 +67,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
         repository: widget.appointmentRepository,
       ),
       const ToolsScreen(),
-      const ProfileScreen(),
+      ProfileScreen(repository: ApplicationBackend.repositories.patients),
     ];
     return Scaffold(
       body: SafeArea(child: pages[_index]),
@@ -123,10 +129,14 @@ class _HomeTabState extends State<_HomeTab> {
   Future<void> _loadUpcomingAppointment() async {
     try {
       final list = await widget.repository.getAppointments();
-      final active = list.where((item) =>
-          item.status == AppointmentStatus.pending ||
-          item.status == AppointmentStatus.confirmed ||
-          item.status == AppointmentStatus.checkedIn).toList();
+      final active = list
+          .where(
+            (item) =>
+                item.status == AppointmentStatus.pending ||
+                item.status == AppointmentStatus.confirmed ||
+                item.status == AppointmentStatus.checkedIn,
+          )
+          .toList();
 
       active.sort((a, b) {
         final dateCompare = a.date.compareTo(b.date);
@@ -136,17 +146,23 @@ class _HomeTabState extends State<_HomeTab> {
 
       // Find pending follow-up (completed with followUpDate that has not been re-booked yet)
       Appointment? followUp;
-      final completedWithFollowUp = list.where((item) =>
-          item.status == AppointmentStatus.completed &&
-          item.followUpDate != null).toList();
+      final completedWithFollowUp = list
+          .where(
+            (item) =>
+                item.status == AppointmentStatus.completed &&
+                item.followUpDate != null,
+          )
+          .toList();
 
       completedWithFollowUp.sort((a, b) => b.date.compareTo(a.date));
 
       for (final comp in completedWithFollowUp) {
-        final alreadyBooked = list.any((other) =>
-            other.id != comp.id &&
-            other.parentAppointmentId == comp.id &&
-            other.status != AppointmentStatus.cancelled);
+        final alreadyBooked = list.any(
+          (other) =>
+              other.id != comp.id &&
+              other.parentAppointmentId == comp.id &&
+              other.status != AppointmentStatus.cancelled,
+        );
         if (!alreadyBooked) {
           followUp = comp;
           break;
@@ -154,7 +170,9 @@ class _HomeTabState extends State<_HomeTab> {
       }
 
       Appointment? latestCompleted;
-      final allCompleted = list.where((item) => item.status == AppointmentStatus.completed).toList();
+      final allCompleted = list
+          .where((item) => item.status == AppointmentStatus.completed)
+          .toList();
       allCompleted.sort((a, b) => b.date.compareTo(a.date));
       if (allCompleted.isNotEmpty) {
         latestCompleted = allCompleted.first;
@@ -262,7 +280,10 @@ class _HomeTabState extends State<_HomeTab> {
                         const SizedBox(height: 8),
                         const Text(
                           'Đặt lịch khám nhanh chóng với các bác sĩ đầu ngành và theo dõi đơn thuốc điện tử tiện lợi.',
-                          style: TextStyle(color: Color(0xFFD5F4F5), height: 1.4),
+                          style: TextStyle(
+                            color: Color(0xFFD5F4F5),
+                            height: 1.4,
+                          ),
                         ),
                         const SizedBox(height: 20),
                         FilledButton.icon(
@@ -290,8 +311,9 @@ class _HomeTabState extends State<_HomeTab> {
                   const SectionTitle(title: 'Tiện ích nhanh'),
                   const SizedBox(height: 14),
                   GridView.count(
-                    crossAxisCount:
-                        MediaQuery.sizeOf(context).width > 600 ? 4 : 2,
+                    crossAxisCount: MediaQuery.sizeOf(context).width > 600
+                        ? 4
+                        : 2,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
                     childAspectRatio: 1.22,
@@ -412,12 +434,23 @@ class _HomeTabState extends State<_HomeTab> {
                         icon: Icons.forum_rounded,
                         title: 'Tư vấn hậu khám',
                         onTap: () {
-                          final targetId = _latestCompletedAppointment?.id ?? 'APT-103';
+                          if (AwsConfig.useAws &&
+                              _latestCompletedAppointment == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Bạn chưa có lịch khám hoàn tất để mở tư vấn hậu khám.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                          final targetId =
+                              _latestCompletedAppointment?.id ?? 'APT-001';
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => PostCareChatScreen(
-                                appointmentId: targetId,
-                              ),
+                              builder: (_) =>
+                                  PostCareChatScreen(appointmentId: targetId),
                             ),
                           );
                         },
@@ -441,12 +474,17 @@ class _HomeTabState extends State<_HomeTab> {
                   ListenableBuilder(
                     listenable: VaccinationStore.instance,
                     builder: (context, _) {
-                      final upcomingVaccines = VaccinationStore.instance.getUpcoming();
-                      if (upcomingVaccines.isNotEmpty && upcomingVaccines.first.isDueSoon) {
+                      final upcomingVaccines = VaccinationStore.instance
+                          .getUpcoming();
+                      if (upcomingVaccines.isNotEmpty &&
+                          upcomingVaccines.first.isDueSoon) {
                         return Column(
                           children: [
                             const SizedBox(height: 20),
-                            _buildVaccineDueSoonCard(context, upcomingVaccines.first),
+                            _buildVaccineDueSoonCard(
+                              context,
+                              upcomingVaccines.first,
+                            ),
                           ],
                         );
                       }
@@ -508,7 +546,8 @@ class _HomeTabState extends State<_HomeTab> {
       countdownText = 'Lịch hẹn định kỳ';
     }
 
-    final doctor = doctors.where((d) => d.id == apt.doctorId).firstOrNull ??
+    final doctor =
+        doctors.where((d) => d.id == apt.doctorId).firstOrNull ??
         Doctor(
           id: apt.doctorId,
           name: apt.doctorName,
@@ -573,8 +612,10 @@ class _HomeTabState extends State<_HomeTab> {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: badgeBg,
                   borderRadius: BorderRadius.circular(20),
@@ -607,8 +648,11 @@ class _HomeTabState extends State<_HomeTab> {
                     CircleAvatar(
                       radius: 18,
                       backgroundColor: doctor.color,
-                      child: const Icon(Icons.person,
-                          size: 20, color: AppColors.navy),
+                      child: const Icon(
+                        Icons.person,
+                        size: 20,
+                        color: AppColors.navy,
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -666,8 +710,7 @@ class _HomeTabState extends State<_HomeTab> {
                   icon: const Icon(Icons.bolt_rounded, size: 20),
                   label: const Text(
                     '1 chạm Đặt lịch tái khám',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   onPressed: () async {
                     await Navigator.of(context).push(
@@ -709,8 +752,7 @@ class _HomeTabState extends State<_HomeTab> {
                   },
                   child: const Text(
                     'Xem bệnh án cũ',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                 ),
               ),
@@ -729,7 +771,9 @@ class _HomeTabState extends State<_HomeTab> {
       decoration: BoxDecoration(
         color: const Color(0xFFF0FDFA),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.35)),
+        border: Border.all(
+          color: const Color(0xFF0D9488).withValues(alpha: 0.35),
+        ),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF0D9488).withValues(alpha: 0.08),
@@ -749,7 +793,11 @@ class _HomeTabState extends State<_HomeTab> {
                   color: const Color(0xFF0D9488).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.vaccines_rounded, color: Color(0xFF0D9488), size: 22),
+                child: const Icon(
+                  Icons.vaccines_rounded,
+                  color: Color(0xFF0D9488),
+                  size: 22,
+                ),
               ),
               const SizedBox(width: 10),
               const Expanded(
@@ -773,11 +821,16 @@ class _HomeTabState extends State<_HomeTab> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFCCFBF1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.4)),
+                  border: Border.all(
+                    color: const Color(0xFF0D9488).withValues(alpha: 0.4),
+                  ),
                 ),
                 child: Text(
                   '💉 Còn $days ngày đến hẹn',
@@ -793,7 +846,11 @@ class _HomeTabState extends State<_HomeTab> {
           const SizedBox(height: 12),
           Text(
             'Mũi ${vac.doseNumber + 1}/${vac.totalDoses}: ${vac.vaccineName}',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: Color(0xFF0F172A)),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14.5,
+              color: Color(0xFF0F172A),
+            ),
           ),
           const SizedBox(height: 2),
           Text(
@@ -809,10 +866,15 @@ class _HomeTabState extends State<_HomeTab> {
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   icon: const Icon(Icons.calendar_month_rounded, size: 18),
-                  label: const Text('1 chạm Đặt lịch tiêm', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  label: const Text(
+                    '1 chạm Đặt lịch tiêm',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
                   onPressed: () {
                     final doc = doctors.first;
                     Navigator.of(context).push(
@@ -820,7 +882,8 @@ class _HomeTabState extends State<_HomeTab> {
                         builder: (_) => BookAppointmentScreen(
                           doctor: doc,
                           initialDate: vac.nextDoseDate,
-                          initialReason: 'Tiêm chủng vắc-xin: ${vac.vaccineName} (Mũi ${vac.doseNumber + 1})',
+                          initialReason:
+                              'Tiêm chủng vắc-xin: ${vac.vaccineName} (Mũi ${vac.doseNumber + 1})',
                           repository: widget.repository,
                         ),
                       ),
@@ -835,7 +898,9 @@ class _HomeTabState extends State<_HomeTab> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF0D9488),
                     side: const BorderSide(color: Color(0xFF0D9488)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   onPressed: () {
                     Navigator.of(context).push(
@@ -844,7 +909,10 @@ class _HomeTabState extends State<_HomeTab> {
                       ),
                     );
                   },
-                  child: const Text('Xem sổ tiêm', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  child: const Text(
+                    'Xem sổ tiêm',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
                 ),
               ),
             ],
@@ -867,9 +935,9 @@ class _HomeTabState extends State<_HomeTab> {
     if (appointment == null) {
       return InkWell(
         onTap: () async {
-          await Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const DoctorListScreen()),
-          );
+          await Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const DoctorListScreen()));
           _loadUpcomingAppointment();
         },
         borderRadius: BorderRadius.circular(16),
@@ -913,7 +981,11 @@ class _HomeTabState extends State<_HomeTab> {
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.mutedText),
+              const Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: AppColors.mutedText,
+              ),
             ],
           ),
         ),
@@ -989,8 +1061,10 @@ class _HomeTabState extends State<_HomeTab> {
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
@@ -1056,15 +1130,24 @@ class _HomeTabState extends State<_HomeTab> {
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF0D9488).withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.2)),
+                    border: Border.all(
+                      color: const Color(0xFF0D9488).withValues(alpha: 0.2),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.qr_code_2_rounded, size: 18, color: Color(0xFF0D9488)),
+                      const Icon(
+                        Icons.qr_code_2_rounded,
+                        size: 18,
+                        color: Color(0xFF0D9488),
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -1078,7 +1161,11 @@ class _HomeTabState extends State<_HomeTab> {
                           ),
                         ),
                       ),
-                      const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Color(0xFF0D9488)),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 12,
+                        color: Color(0xFF0D9488),
+                      ),
                     ],
                   ),
                 ),
@@ -1087,7 +1174,8 @@ class _HomeTabState extends State<_HomeTab> {
               ListenableBuilder(
                 listenable: ClinicalIntakeStore.instance,
                 builder: (context, _) {
-                  final intake = ClinicalIntakeStore.instance.getByAppointmentId(appointment.id);
+                  final intake = ClinicalIntakeStore.instance
+                      .getByAppointmentId(appointment.id);
                   final hasIntake = intake != null;
                   return InkWell(
                     onTap: () async {
@@ -1095,8 +1183,9 @@ class _HomeTabState extends State<_HomeTab> {
                         MaterialPageRoute(
                           builder: (_) => PreVisitIntakeScreen(
                             appointment: appointment,
-                            repository: widget.repository is RemoteAppointmentRepository
-                                ? const RemoteClinicalIntakeRepository()
+                            repository:
+                                widget.repository is RemoteAppointmentRepository
+                                ? ApplicationBackend.repositories.clinicalIntake
                                 : const LocalClinicalIntakeRepository(),
                           ),
                         ),
@@ -1106,7 +1195,10 @@ class _HomeTabState extends State<_HomeTab> {
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
                       decoration: BoxDecoration(
                         color: hasIntake
                             ? const Color(0xFFF0FDF4)
@@ -1189,10 +1281,7 @@ class _HomeTabState extends State<_HomeTab> {
             ),
             const Text(
               'Hỗ trợ Y tế & Cấp cứu khẩn cấp',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             const Text(
@@ -1207,7 +1296,10 @@ class _HomeTabState extends State<_HomeTab> {
               ),
               title: const Text(
                 'Gọi cấp cứu 115',
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
               ),
               subtitle: const Text('Trung tâm cấp cứu y tế quốc gia'),
               trailing: const Icon(Icons.phone, color: Colors.red),
@@ -1220,7 +1312,10 @@ class _HomeTabState extends State<_HomeTab> {
             ListTile(
               leading: CircleAvatar(
                 backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                child: const Icon(Icons.local_hospital, color: AppColors.primary),
+                child: const Icon(
+                  Icons.local_hospital,
+                  color: AppColors.primary,
+                ),
               ),
               title: const Text(
                 'Tổng đài Smart Hospital',

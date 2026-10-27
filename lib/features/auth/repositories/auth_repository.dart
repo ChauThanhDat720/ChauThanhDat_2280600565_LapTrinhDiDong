@@ -92,6 +92,7 @@ class LocalAuthRepository implements AuthRepository {
       role: role,
     );
   }
+
   @override
   Future<void> signOut() => PatientSession.instance.clear();
   @override
@@ -135,7 +136,16 @@ class CognitoAuthRepository implements AuthRepository {
       AuthUserAttributeKey.name: name,
     };
     if (phone?.isNotEmpty ?? false) {
-      attrs[AuthUserAttributeKey.phoneNumber] = phone!;
+      final trimmed = phone!.trim().replaceAll(RegExp(r'[\s.-]'), '');
+      final normalized = trimmed.startsWith('0')
+          ? '+84${trimmed.substring(1)}'
+          : trimmed;
+      if (!RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(normalized)) {
+        throw const AuthRepositoryException(
+          'Số điện thoại không hợp lệ. Dùng 09... hoặc định dạng +84...',
+        );
+      }
+      attrs[AuthUserAttributeKey.phoneNumber] = normalized;
     }
     final r = await Amplify.Auth.signUp(
       username: email,
@@ -164,6 +174,8 @@ class CognitoAuthRepository implements AuthRepository {
     String? demoName,
   }) async {
     await _ready();
+    final existing = await Amplify.Auth.fetchAuthSession();
+    if (existing.isSignedIn) await Amplify.Auth.signOut();
     final r = await Amplify.Auth.signIn(username: email, password: password);
     if (!r.isSignedIn) {
       throw const AuthRepositoryException(
@@ -184,6 +196,7 @@ class CognitoAuthRepository implements AuthRepository {
   Future<void> signOut() async {
     await _ready();
     await Amplify.Auth.signOut();
+    await PatientSession.instance.clear();
   }
 
   @override
@@ -230,7 +243,19 @@ class CognitoAuthRepository implements AuthRepository {
         : roles.contains('patients')
         ? UserRole.patient
         : UserRole.unknown;
+    await PatientSession.instance.signIn(
+      name: a[AuthUserAttributeKey.name] ?? '',
+      email: a[AuthUserAttributeKey.email] ?? user.username,
+    );
     return AppUser(
+      doctorId:
+          session
+                  .userPoolTokensResult
+                  .valueOrNull
+                  ?.idToken
+                  .claims
+                  .customClaims['custom:doctorId']
+              as String?,
       id: user.userId,
       fullName: a[AuthUserAttributeKey.name] ?? '',
       email: a[AuthUserAttributeKey.email] ?? user.username,

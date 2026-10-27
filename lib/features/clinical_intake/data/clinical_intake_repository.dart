@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/utils/app_timezone.dart';
 import '../../appointments/domain/appointment.dart';
 import '../domain/clinical_intake.dart';
@@ -35,8 +36,13 @@ class ClinicalIntakeStore extends ChangeNotifier {
       painLocation: 'Ngực / Tim mạch',
       onsetDuration: '3 ngày trước',
       painLevel: 6,
-      symptoms: ['Đau thắt ngực', 'Khó thở khi gắng sức', 'Hồi hộp đánh trống ngực'],
-      currentMedications: 'Panadol Extra khi nhức đầu, viên uống bổ sung Omega 3',
+      symptoms: [
+        'Đau thắt ngực',
+        'Khó thở khi gắng sức',
+        'Hồi hộp đánh trống ngực',
+      ],
+      currentMedications:
+          'Panadol Extra khi nhức đầu, viên uống bổ sung Omega 3',
       medicalHistory: 'Tăng huyết áp 2 năm, chưa từng phẫu thuật',
       knownAllergies: 'Dị ứng kháng sinh nhóm Penicillin (nổi mề đay ngứa)',
       notes: 'Bác sĩ kiểm tra kỹ tim mạch giúp em vì ba em có tiền sử nhồi máu cơ tim.',
@@ -78,7 +84,9 @@ class ClinicalIntakeStore extends ChangeNotifier {
         .where((a) => a.id == intake.appointmentId)
         .firstOrNull;
     if (appt != null) {
-      AppointmentStore.instance.replaceAppointment(appt.copyWith(hasIntake: true));
+      AppointmentStore.instance.replaceAppointment(
+        appt.copyWith(hasIntake: true),
+      );
     }
 
     notifyListeners();
@@ -101,42 +109,25 @@ class LocalClinicalIntakeRepository implements ClinicalIntakeRepository {
 }
 
 class RemoteClinicalIntakeRepository implements ClinicalIntakeRepository {
-  const RemoteClinicalIntakeRepository([this._client]);
-  final ApiClient? _client;
-  static const _fallback = LocalClinicalIntakeRepository();
-
+  const RemoteClinicalIntakeRepository(this._client);
+  final ApiClient _client;
   @override
   Future<ClinicalIntake?> getIntake(String appointmentId) async {
     try {
-      if (_client == null) return await _fallback.getIntake(appointmentId);
-      final res = await _client.get('/appointments/$appointmentId/intake');
-      if (res is Map<String, dynamic>) {
-        final intake = ClinicalIntake.fromJson(res);
-        ClinicalIntakeStore.instance.save(intake);
-        return intake;
-      }
-      return await _fallback.getIntake(appointmentId);
-    } catch (_) {
-      return await _fallback.getIntake(appointmentId);
+      final value = await _client.get('/appointments/$appointmentId/intake');
+      return ClinicalIntake.fromJson(value as Map<String, dynamic>);
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return null;
+      rethrow;
     }
   }
 
   @override
-  Future<ClinicalIntake> saveIntake(ClinicalIntake intake) async {
-    try {
-      ClinicalIntakeStore.instance.save(intake);
-      if (_client != null) {
-        final res = await _client.post(
+  Future<ClinicalIntake> saveIntake(ClinicalIntake intake) async =>
+      ClinicalIntake.fromJson(
+        await _client.post(
           '/appointments/${intake.appointmentId}/intake',
           body: intake.toJson(),
-        );
-        if (res is Map<String, dynamic>) {
-          return ClinicalIntake.fromJson(res);
-        }
-      }
-      return intake;
-    } catch (_) {
-      return intake;
-    }
-  }
+        ) as Map<String, dynamic>,
+      );
 }

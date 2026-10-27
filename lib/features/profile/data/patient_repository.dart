@@ -1,4 +1,5 @@
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/session/patient_session.dart';
 import '../domain/patient_profile.dart';
 
@@ -49,23 +50,54 @@ class RemotePatientRepository implements PatientRepository {
 
   @override
   Future<PatientProfile?> getMyProfile() async {
-    final value = await _client.get('/patients/me');
-    return value is Map<String, dynamic>
-        ? PatientProfile.fromJson(value)
-        : null;
+    try {
+      final value = await _client.get('/patients/me');
+      return value is Map<String, dynamic> ? _decode(value) : null;
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return null;
+      rethrow;
+    }
   }
 
   @override
   Future<PatientProfile> createMyProfile(PatientProfile profile) async =>
-      PatientProfile.fromJson(
-        await _client.post('/patients/me', body: profile.toJson())
+      _decode(
+        await _client.post('/patients/me', body: _body(profile))
             as Map<String, dynamic>,
       );
 
   @override
   Future<PatientProfile> updateMyProfile(PatientProfile profile) async =>
-      PatientProfile.fromJson(
-        await _client.patch('/patients/me', body: profile.toJson())
+      _decode(
+        await _client.patch('/patients/me', body: _body(profile))
             as Map<String, dynamic>,
       );
+  Map<String, dynamic> _body(PatientProfile profile) {
+    final result = profile.toJson();
+    final dob = profile.dateOfBirth.trim();
+    final parts = RegExp(r'^(\d{2})/(\d{2})/(\d{4})$').firstMatch(dob);
+    if (parts != null) {
+      final day = int.parse(parts[1]!),
+          month = int.parse(parts[2]!),
+          year = int.parse(parts[3]!);
+      final date = DateTime.utc(year, month, day);
+      if (date.day != day || date.month != month || date.year != year) {
+        throw const ApiException(
+          message: 'Ngày sinh không hợp lệ. Dùng dd/mm/yyyy.',
+        );
+      }
+      result['dateOfBirth'] = date.toIso8601String().substring(0, 10);
+    }
+    return result;
+  }
+
+  PatientProfile _decode(Map<String, dynamic> value) {
+    final data = Map<String, dynamic>.of(value);
+    final dob = data['dateOfBirth'];
+    if (dob is String && RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dob)) {
+      data['dateOfBirth'] =
+          '${dob.substring(8, 10)}/${dob.substring(5, 7)}/${dob.substring(0, 4)}';
+    }
+    return PatientProfile.fromJson(data);
+  }
 }

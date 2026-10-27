@@ -1,3 +1,5 @@
+import '../../../core/repositories/application_backend.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -6,12 +8,12 @@ import '../domain/appointment.dart';
 import 'digital_boarding_pass_screen.dart';
 
 class ReceptionCheckinScreen extends StatefulWidget {
-  const ReceptionCheckinScreen({
-    super.key,
-    this.repository = const LocalAppointmentRepository(),
-  });
+  const ReceptionCheckinScreen({super.key, AppointmentRepository? repository})
+    : _providedRepository = repository;
 
-  final AppointmentRepository repository;
+  final AppointmentRepository? _providedRepository;
+  AppointmentRepository get repository =>
+      _providedRepository ?? ApplicationBackend.repositories.appointments;
 
   @override
   State<ReceptionCheckinScreen> createState() => _ReceptionCheckinScreenState();
@@ -70,18 +72,28 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            icon: const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 52),
+            icon: const Icon(
+              Icons.check_circle_rounded,
+              color: AppColors.success,
+              size: 52,
+            ),
             title: const Text('Tiếp đón thành công!'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   'Bệnh nhân: ${updated.patientName}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF0D9488).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
@@ -115,7 +127,10 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
                 const SizedBox(height: 8),
                 Text(
                   'Bác sĩ: ${updated.doctorName} (${updated.department})',
-                  style: const TextStyle(color: AppColors.mutedText, fontSize: 13),
+                  style: const TextStyle(
+                    color: AppColors.mutedText,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
@@ -160,10 +175,11 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
     final waitingToConfirm = _appointments
         .where((a) => a.status == AppointmentStatus.confirmed)
         .toList();
-    final checkedInQueue = _appointments
-        .where((a) => a.status == AppointmentStatus.checkedIn)
-        .toList()
-      ..sort((a, b) => (a.queueNumber ?? 0).compareTo(b.queueNumber ?? 0));
+    final checkedInQueue =
+        _appointments
+            .where((a) => a.status == AppointmentStatus.checkedIn)
+            .toList()
+          ..sort((a, b) => (a.queueNumber ?? 0).compareTo(b.queueNumber ?? 0));
 
     return Scaffold(
       appBar: AppBar(
@@ -198,7 +214,9 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
                   // Fast Code Input Card
                   Card(
                     elevation: 2,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
@@ -206,12 +224,18 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
                         children: [
                           const Text(
                             'Quét hoặc nhập mã lịch hẹn (APT-XXXX)',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           const Text(
                             'Quét mã QR từ Thẻ lên phòng khám của bệnh nhân để tự động cấp số thứ tự.',
-                            style: TextStyle(fontSize: 12, color: AppColors.mutedText),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.mutedText,
+                            ),
                           ),
                           const SizedBox(height: 14),
                           Row(
@@ -220,9 +244,14 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
                                 child: TextField(
                                   controller: _codeController,
                                   decoration: InputDecoration(
-                                    hintText: 'Nhập mã ca khám hoặc CHECKIN:APT-...',
-                                    prefixIcon: const Icon(Icons.qr_code_2_rounded),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                                    hintText:
+                                        'Nhập mã ca khám hoặc CHECKIN:APT-...',
+                                    prefixIcon: const Icon(
+                                      Icons.qr_code_2_rounded,
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                    ),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
@@ -234,15 +263,22 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
                               FilledButton(
                                 onPressed: _processing
                                     ? null
-                                    : () => _processCheckin(_codeController.text),
+                                    : () =>
+                                          _processCheckin(_codeController.text),
                                 style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 18,
+                                    vertical: 14,
+                                  ),
                                 ),
                                 child: _processing
                                     ? const SizedBox(
                                         width: 16,
                                         height: 16,
-                                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
                                       )
                                     : const Text('Tiếp đón'),
                               ),
@@ -263,7 +299,12 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
                   const SizedBox(height: 8),
 
                   if (_loading)
-                    const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
                   else if (waitingToConfirm.isEmpty)
                     Container(
                       width: double.infinity,
@@ -275,7 +316,11 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
                       ),
                       child: const Column(
                         children: [
-                          Icon(Icons.check_circle_outline, color: AppColors.mutedText, size: 36),
+                          Icon(
+                            Icons.check_circle_outline,
+                            color: AppColors.mutedText,
+                            size: 36,
+                          ),
                           SizedBox(height: 8),
                           Text(
                             'Không có ca khám nào đang chờ tiếp đón.',
@@ -299,12 +344,19 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
                           ),
                           child: ListTile(
                             leading: CircleAvatar(
-                              backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                              child: const Icon(Icons.person, color: AppColors.primary),
+                              backgroundColor: AppColors.primary.withValues(
+                                alpha: 0.1,
+                              ),
+                              child: const Icon(
+                                Icons.person,
+                                color: AppColors.primary,
+                              ),
                             ),
                             title: Text(
                               item.patientName,
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             subtitle: Text(
                               '${item.doctorName} • ${item.time} (${item.dateLabel})\nMã: ${item.id}',
@@ -332,16 +384,27 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.airline_seat_recline_normal_rounded, size: 64, color: AppColors.mutedText),
+                        Icon(
+                          Icons.airline_seat_recline_normal_rounded,
+                          size: 64,
+                          color: AppColors.mutedText,
+                        ),
                         SizedBox(height: 12),
                         Text(
                           'Chưa có bệnh nhân nào trong phòng chờ',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.mutedText),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.mutedText,
+                          ),
                         ),
                         SizedBox(height: 4),
                         Text(
                           'Các ca khám đã tiếp đón sẽ hiển thị số thứ tự tại đây.',
-                          style: TextStyle(color: AppColors.mutedText, fontSize: 13),
+                          style: TextStyle(
+                            color: AppColors.mutedText,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -388,9 +451,12 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                item.queueNumber?.toString().padLeft(2, '0') ?? '01',
+                                item.queueNumber?.toString().padLeft(2, '0') ??
+                                    '01',
                                 style: TextStyle(
-                                  color: isCurrent ? Colors.white : AppColors.primary,
+                                  color: isCurrent
+                                      ? Colors.white
+                                      : AppColors.primary,
                                   fontSize: 24,
                                   fontWeight: FontWeight.w900,
                                 ),
@@ -413,10 +479,15 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
                                       if (isCurrent) ...[
                                         const SizedBox(width: 8),
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
                                           decoration: BoxDecoration(
                                             color: const Color(0xFF0D9488),
-                                            borderRadius: BorderRadius.circular(4),
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
                                           ),
                                           child: const Text(
                                             'Đang gọi',
@@ -433,7 +504,10 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
                                   const SizedBox(height: 3),
                                   Text(
                                     'BS: ${item.doctorName} • ${item.department}',
-                                    style: const TextStyle(fontSize: 13, color: AppColors.mutedText),
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.mutedText,
+                                    ),
                                   ),
                                   Text(
                                     item.roomNumber ?? 'Phòng 204 - Tầng 2',
@@ -447,7 +521,10 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
                               ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.qr_code_2_rounded, color: AppColors.primary),
+                              icon: const Icon(
+                                Icons.qr_code_2_rounded,
+                                color: AppColors.primary,
+                              ),
                               tooltip: 'Xem thẻ lên phòng khám',
                               onPressed: () {
                                 Navigator.of(context).push(

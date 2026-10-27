@@ -1,83 +1,95 @@
 # Smart Hospital
 
-Ứng dụng Flutter quản lý bệnh viện. App hiện chạy local-first: bác sĩ/khoa là
-dữ liệu mẫu, lịch khám lưu trong bộ nhớ và hồ sơ cơ bản cache bằng
-`SharedPreferences`. Không có thông tin AWS hoặc mật khẩu trong source.
+Ứng dụng Flutter quản lý bệnh viện với hai chế độ:
 
-## Phase 3 — kiến trúc backend
+- **Local** (mặc định): dữ liệu demo và các chức năng trên thiết bị.
+- **AWS**: Cognito + API Gateway REST + Lambda Node.js 24 + DynamoDB + S3 private.
+
+Source đã có API; cấu hình AWS được chuẩn bị tại `backend/template.yaml` và
+`backend/aws/`. Chưa tạo tài nguyên cloud hay endpoint thật. Không có AWS access
+key, secret key, mật khẩu hoặc token được đưa vào source.
+
+## Thiết lập AWS
+
+Hướng dẫn đầy đủ: [docs/AWS_SETUP.md](docs/AWS_SETUP.md).
 
 ```text
-Flutter -- HTTPS + JWT --> API Gateway --> Lambda --> DynamoDB
-   |                                             |
-   +-- Cognito (đăng nhập, token)                +--> S3 presigned URL
+Flutter -- Cognito ID token --> API Gateway --> Lambda --> DynamoDB
+   |                                            |
+   +-- Cognito đăng nhập                        +--> S3 URL ký sẵn cho ảnh
 ```
 
-- Flutter lấy JWT từ Amazon Cognito trong phase tích hợp xác thực.
-- API Gateway kiểm tra token qua Cognito authorizer trước khi gọi Lambda.
-- Lambda lấy `sub` từ JWT, kiểm tra vai trò và ownership của từng bản ghi.
-- Lambda chỉ trả URL S3 ký sẵn; Flutter không bao giờ có AWS access key/secret.
-- OpenStreetMap, `flutter_map` và ML Kit vẫn chạy trên thiết bị.
+AWS mode đã nối các luồng đăng nhập/đăng ký, bác sĩ, đặt lịch, tiếp nhận, hồ sơ
+bệnh nhân, gia đình, tiền khám và tư vấn hậu khám. Công cụ thiết bị, thanh toán
+mô phỏng, tiêm chủng, sinh hiệu, nhắc thuốc và kết quả xét nghiệm mẫu còn ở local.
 
-`backend/` là AWS SAM blueprint local. Chưa có tài nguyên AWS nào được tạo hay
-deploy bởi project này.
-
-## API contracts
-
-| Method | Path | Auth | Mục đích |
-| --- | --- | --- | --- |
-| GET | `/health` | No | `{ "status": "ok", "service": "smart-hospital-api" }` |
-| GET | `/departments` | No | Danh sách khoa |
-| GET | `/doctors` | No | Danh sách bác sĩ |
-| GET | `/doctors/{id}` | No | Chi tiết bác sĩ |
-| GET | `/appointments` | Patient JWT | Chỉ lịch của token hiện tại |
-| POST | `/appointments` | Patient JWT | Tạo lịch cho token hiện tại |
-| GET | `/appointments/{id}` | Patient JWT | Chỉ trả lịch thuộc token hiện tại |
-| PATCH | `/appointments/{id}/cancel` | Patient JWT | Chỉ hủy lịch thuộc token hiện tại |
-| GET | `/patients/me` | Patient JWT | Hồ sơ của token hiện tại |
-| PATCH | `/patients/me` | Patient JWT | Cập nhật hồ sơ của token hiện tại |
-
-## DynamoDB design (đề xuất, chưa tạo bảng)
-
-| Entity | Khóa / thuộc tính chính | Quan hệ và truy vấn |
-| --- | --- | --- |
-| Patients | `PK=PATIENT#{cognitoSub}`, tên, liên hệ, DOB, `role` | `GET/PATCH /patients/me` bằng `sub` JWT |
-| Doctors | `PK=DOCTOR#{doctorId}`, `departmentId`, chuyên khoa | GSI `departmentId` cho danh sách theo khoa |
-| Departments | `PK=DEPARTMENT#{departmentId}`, tên, mô tả | Catalog public/cache |
-| Appointments | `PK=PATIENT#{sub}`, `SK=APPOINTMENT#{scheduledAt}#{id}`, doctorId, status | Query lịch bệnh nhân; GSI `DOCTOR#{doctorId}` cho portal bác sĩ |
-| MedicalRecords | `PK=PATIENT#{sub}`, `SK=RECORD#{createdAt}#{id}`, doctorId | Patient sở hữu hoặc doctor được cấp quyền |
-| Prescriptions | `PK=PATIENT#{sub}`, `SK=PRESCRIPTION#{createdAt}#{id}`, recordId | Query theo bệnh nhân/record |
-
-Mọi handler phải dùng `sub` từ JWT thay vì `patientId` do client gửi. Không ghi
-PHI, token hay toa thuốc vào log. IAM Lambda chỉ cấp quyền table/index/prefix S3
-cần dùng.
-
-## Flutter API client và local mode
-
-`lib/core/network/` có `ApiConfig`, `ApiClient`, `ApiException` với GET/POST/
-PATCH, timeout, lỗi HTTP/network và `AccessTokenProvider` cho JWT trong phase
-Cognito. API URL không hard-code trong màn hình:
+Sau khi triển khai stack, xuất public IDs và API URL thành file cấu hình:
 
 ```sh
-flutter run --dart-define=API_BASE_URL=https://api.example.com \
-  --dart-define=API_TIMEOUT_SECONDS=15
+python3 tool/configure_aws.py --stack-name smart-hospital-dev \
+  --region ap-southeast-1 --profile smart-hospital
+bash tool/run_aws.sh run
 ```
 
-`HospitalRepositories` mặc định dùng `LocalDoctorRepository`,
-`LocalAppointmentRepository`, `LocalPatientRepository`. Chỉ tạo remote repo
-khi phase sau truyền `useRemote: true`, API URL hợp lệ và token provider. App
-vẫn dùng được khi offline/chưa cấu hình AWS.
+`config/aws.example.json` chỉ là mẫu. `config/aws.local.json` được gitignore.
+Để tạo APK kết nối AWS thật, chạy `bash tool/run_aws.sh apk` sau khi đã có cấu
+hình thật. APK local đã xuất trước đó không tự đổi sang AWS.
 
-## Kiểm tra
+## Chạy local và kiểm tra
 
 ```sh
 flutter pub get
-dart format lib test
+flutter run
 flutter analyze
+flutter test
 
+# AWS API unit tests, không gọi cloud:
+npm ci --prefix backend/aws --ignore-scripts
+npm test --prefix backend/aws
+
+# Backend SQLite demo (không deploy server này lên Lambda):
 cd backend
+npm ci
 npm test
-npm run format:check
+npm start
 ```
 
-Nếu AWS SAM CLI được cài đặt sau khi hạ tầng được phê duyệt, có thể kiểm tra
-template bằng `sam validate --template template.yaml`; chưa chạy `sam deploy`.
+Backend AWS được đóng gói riêng nên không phụ thuộc SQLite. API yêu cầu quyền
+bệnh nhân/bác sĩ từ token, không dùng header giả lập role của server local.
+Xem hướng dẫn AWS để validate/build SAM, triển khai, gán tài khoản bác sĩ và xuất
+cấu hình Flutter.
+
+## Hồ sơ gia đình và tư vấn hậu khám trong local mode
+
+- Hồ sơ gia đình được lưu trên thiết bị bằng `SharedPreferences`, theo tài khoản
+  email local (hoặc vùng dữ liệu demo khi chưa đăng nhập). Thêm, sửa, xóa và chọn
+  hồ sơ mặc định đều được lưu; các màn hình đọc lại cùng dữ liệu. Chỉ báo thành
+  công sau khi ghi xong. Khi sửa người đang xem, thanh chọn hồ sơ cập nhật ngay.
+- Phiên hậu khám lưu tin nhắn, ảnh đính kèm, trạng thái đóng, thời hạn và lựa chọn
+  bật/tắt phản hồi tự động. Đóng rồi mở ứng dụng không khởi tạo lại lịch sử hoặc
+  gia hạn phiên đã lưu. Tin của bệnh nhân vẫn được đánh dấu chờ bác sĩ xem dù
+  trợ lý đã trả lời.
+- Trợ lý hậu khám hiện hoạt động offline theo nhóm câu hỏi, có nhãn riêng với bác
+  sĩ. Hỗ trợ hỏi đơn thuốc đã lưu, quên liều, triệu chứng, tái khám và ghi yêu cầu
+  bác sĩ. Đây chưa phải mô hình AI qua API hay kênh gửi thông báo đến bác sĩ từ xa.
+  AWS backend cũng có trợ lý theo kịch bản và lưu chat trên DynamoDB; xem hướng dẫn AWS.
+- Đính kèm ảnh thật từ thư viện/camera, tối đa 1 MB sau thu nhỏ. Ảnh được lưu cùng
+  hội thoại trên thiết bị; trợ lý không suy luận chẩn đoán từ ảnh. Khi gửi lỗi,
+  bản nháp còn nguyên để thử lại và nút gửi ngăn thao tác gửi lặp.
+
+Nội dung hỗ trợ thuốc tham khảo [NHS SPS](https://www.sps.nhs.uk/articles/advising-on-missed-or-delayed-doses-of-medicines/)
+và [Surrey and Sussex Healthcare NHS Trust](https://www.surreyandsussex.nhs.uk/our-services/pharmacy).
+Trợ lý không tự kê đơn hoặc thay đổi liều; các câu hỏi cần đánh giá điều trị được
+hướng dẫn liên hệ bác sĩ/dược sĩ, dấu hiệu nghiêm trọng được ưu tiên hướng dẫn cấp cứu.
+
+Kiểm thử hồi quy:
+
+```sh
+flutter test test/family_feature_test.dart test/teleconsultation_test.dart \
+  test/family_post_care_regression_test.dart
+flutter analyze
+```
+
+Nếu hệ thống báo lỗi đọc file build `Operation timed out` trong Desktop, có thể
+sao chép mã nguồn sang một thư mục local khác, bỏ qua `build/`, `.dart_tool/` và
+các thư mục `.gradle/`, rồi chạy `flutter pub get` để tạo lại cache build.

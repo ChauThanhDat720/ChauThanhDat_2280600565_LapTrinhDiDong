@@ -1,3 +1,5 @@
+import '../../../core/repositories/application_backend.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -6,10 +8,7 @@ import '../domain/family_member.dart';
 import 'family_profile_manager.dart';
 
 class FamilyMembersScreen extends StatefulWidget {
-  const FamilyMembersScreen({
-    super.key,
-    this.repository,
-  });
+  const FamilyMembersScreen({super.key, this.repository});
 
   final FamilyRepository? repository;
 
@@ -25,7 +24,7 @@ class _FamilyMembersScreenState extends State<FamilyMembersScreen> {
   @override
   void initState() {
     super.initState();
-    _repository = widget.repository ?? LocalFamilyRepository();
+    _repository = widget.repository ?? ApplicationBackend.repositories.family;
     _loadData();
   }
 
@@ -59,8 +58,12 @@ class _FamilyMembersScreenState extends State<FamilyMembersScreen> {
       ),
     );
 
-    if (result != null) {
-      _loadData();
+    if (result != null && mounted) {
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã lưu hồ sơ gia đình trên thiết bị.')),
+      );
     }
   }
 
@@ -80,14 +83,18 @@ class _FamilyMembersScreenState extends State<FamilyMembersScreen> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Xác nhận xóa thành viên'),
-        content: Text('Bạn có chắc chắn muốn xóa hồ sơ của "${member.fullName}" khỏi danh sách gia đình không?'),
+        content: Text(
+          'Bạn có chắc chắn muốn xóa hồ sơ của "${member.fullName}" khỏi danh sách gia đình không?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('Hủy'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+            ),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Xóa'),
           ),
@@ -109,19 +116,25 @@ class _FamilyMembersScreenState extends State<FamilyMembersScreen> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Lỗi: $e')),
-          );
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('Lỗi: $e')));
         }
       }
     }
   }
 
   Future<void> _setActiveMember(FamilyMember member) async {
-    FamilyProfileManager.instance.switchMember(member);
     try {
-      await _repository.setDefaultMember(member.id);
-    } catch (_) {}
+      final saved = await _repository.setDefaultMember(member.id);
+      FamilyProfileManager.instance.switchMember(saved);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể lưu hồ sơ mặc định: $e')),
+        );
+      }
+      return;
+    }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -157,7 +170,10 @@ class _FamilyMembersScreenState extends State<FamilyMembersScreen> {
               onRefresh: _loadData,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -183,8 +199,14 @@ class _FamilyMembersScreenState extends State<FamilyMembersScreen> {
                         children: [
                           CircleAvatar(
                             radius: 26,
-                            backgroundColor: Colors.white.withValues(alpha: 0.2),
-                            child: const Icon(Icons.family_restroom_rounded, color: Colors.white, size: 30),
+                            backgroundColor: Colors.white.withValues(
+                              alpha: 0.2,
+                            ),
+                            child: const Icon(
+                              Icons.family_restroom_rounded,
+                              color: Colors.white,
+                              size: 30,
+                            ),
                           ),
                           const SizedBox(width: 14),
                           const Expanded(
@@ -202,7 +224,10 @@ class _FamilyMembersScreenState extends State<FamilyMembersScreen> {
                                 SizedBox(height: 4),
                                 Text(
                                   'Dễ dàng đặt lịch khám, quản lý đơn thuốc và theo dõi huyết áp cho Bố Mẹ và Con nhỏ.',
-                                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ],
                             ),
@@ -231,7 +256,10 @@ class _FamilyMembersScreenState extends State<FamilyMembersScreen> {
                           ),
                           onPressed: () => _openAddEditDialog(),
                           icon: const Icon(Icons.add, size: 16),
-                          label: const Text('Thêm người thân', style: TextStyle(fontSize: 12)),
+                          label: const Text(
+                            'Thêm người thân',
+                            style: TextStyle(fontSize: 12),
+                          ),
                         ),
                       ],
                     ),
@@ -309,7 +337,11 @@ class _FamilyMemberCard extends StatelessWidget {
                 CircleAvatar(
                   radius: 24,
                   backgroundColor: member.avatarColor.withValues(alpha: 0.15),
-                  child: Icon(member.relationshipIcon, color: member.avatarColor, size: 26),
+                  child: Icon(
+                    member.relationshipIcon,
+                    color: member.avatarColor,
+                    size: 26,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -329,7 +361,10 @@ class _FamilyMemberCard extends StatelessWidget {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: member.avatarColor.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(8),
@@ -348,7 +383,10 @@ class _FamilyMemberCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         '${member.gender} • ${member.formattedAge} ${member.phone != null ? "• ${member.phone}" : ""}',
-                        style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          color: Color(0xFF64748B),
+                        ),
                       ),
                     ],
                   ),
@@ -362,7 +400,10 @@ class _FamilyMemberCard extends StatelessWidget {
             if (member.bhytCode != null && member.bhytCode!.isNotEmpty) ...[
               Container(
                 margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF0FDF4),
                   borderRadius: BorderRadius.circular(8),
@@ -370,9 +411,16 @@ class _FamilyMemberCard extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.credit_card_rounded, color: Color(0xFF16A34A), size: 16),
+                    const Icon(
+                      Icons.credit_card_rounded,
+                      color: Color(0xFF16A34A),
+                      size: 16,
+                    ),
                     const SizedBox(width: 6),
-                    const Text('Thẻ BHYT: ', style: TextStyle(fontSize: 12, color: Color(0xFF166534))),
+                    const Text(
+                      'Thẻ BHYT: ',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF166534)),
+                    ),
                     Text(
                       member.bhytCode!,
                       style: const TextStyle(
@@ -385,14 +433,21 @@ class _FamilyMemberCard extends StatelessWidget {
                     const Spacer(),
                     if (member.bloodType != null)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFDC2626),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           'Máu: ${member.bloodType}',
-                          style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                   ],
@@ -401,16 +456,24 @@ class _FamilyMemberCard extends StatelessWidget {
             ],
 
             // Tiền sử bệnh lý
-            if (member.medicalHistory != null && member.medicalHistory!.isNotEmpty) ...[
+            if (member.medicalHistory != null &&
+                member.medicalHistory!.isNotEmpty) ...[
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.history_rounded, size: 15, color: Color(0xFF64748B)),
+                  const Icon(
+                    Icons.history_rounded,
+                    size: 15,
+                    color: Color(0xFF64748B),
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       'Tiền sử: ${member.medicalHistory!}',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF475569),
+                      ),
                     ),
                   ),
                 ],
@@ -424,7 +487,10 @@ class _FamilyMemberCard extends StatelessWidget {
               children: [
                 if (isSelected)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF0FDF4),
                       borderRadius: BorderRadius.circular(20),
@@ -433,7 +499,11 @@ class _FamilyMemberCard extends StatelessWidget {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.check_circle_rounded, size: 14, color: Color(0xFF16A34A)),
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 14,
+                          color: Color(0xFF16A34A),
+                        ),
                         SizedBox(width: 4),
                         Text(
                           'Hồ sơ đang xem',
@@ -452,22 +522,36 @@ class _FamilyMemberCard extends StatelessWidget {
                       foregroundColor: AppColors.primary,
                       side: const BorderSide(color: AppColors.primary),
                       visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                     ),
                     onPressed: onSelect,
                     icon: const Icon(Icons.visibility_rounded, size: 14),
-                    label: const Text('Xem hồ sơ này', style: TextStyle(fontSize: 11.5)),
+                    label: const Text(
+                      'Xem hồ sơ này',
+                      style: TextStyle(fontSize: 11.5),
+                    ),
                   ),
                 Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 20, color: Color(0xFF64748B)),
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        size: 20,
+                        color: Color(0xFF64748B),
+                      ),
                       tooltip: 'Chỉnh sửa',
                       onPressed: onEdit,
                     ),
                     if (!member.isSelf)
                       IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Color(0xFFDC2626)),
+                        icon: const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 20,
+                          color: Color(0xFFDC2626),
+                        ),
                         tooltip: 'Xóa thành viên',
                         onPressed: onDelete,
                       ),
@@ -483,19 +567,18 @@ class _FamilyMemberCard extends StatelessWidget {
 }
 
 class _AddEditFamilyMemberDialog extends StatefulWidget {
-  const _AddEditFamilyMemberDialog({
-    this.member,
-    required this.repository,
-  });
+  const _AddEditFamilyMemberDialog({this.member, required this.repository});
 
   final FamilyMember? member;
   final FamilyRepository repository;
 
   @override
-  State<_AddEditFamilyMemberDialog> createState() => _AddEditFamilyMemberDialogState();
+  State<_AddEditFamilyMemberDialog> createState() =>
+      _AddEditFamilyMemberDialogState();
 }
 
-class _AddEditFamilyMemberDialogState extends State<_AddEditFamilyMemberDialog> {
+class _AddEditFamilyMemberDialogState
+    extends State<_AddEditFamilyMemberDialog> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
@@ -554,17 +637,28 @@ class _AddEditFamilyMemberDialogState extends State<_AddEditFamilyMemberDialog> 
       final isEdit = widget.member != null;
       final member = FamilyMember(
         id: widget.member?.id ?? '',
-        primaryPatientId: widget.member?.primaryPatientId ?? 'test-patient-sub-123',
+        primaryPatientId:
+            widget.member?.primaryPatientId ?? 'test-patient-sub-123',
         fullName: _nameController.text.trim(),
         relationship: _relationship,
         dateOfBirth: _dateOfBirth,
         gender: _gender,
-        phone: _phoneController.text.trim().isNotEmpty ? _phoneController.text.trim() : null,
-        bhytCode: _bhytController.text.trim().isNotEmpty ? _bhytController.text.trim() : null,
-        identityCard: _cccdController.text.trim().isNotEmpty ? _cccdController.text.trim() : null,
+        phone: _phoneController.text.trim().isNotEmpty
+            ? _phoneController.text.trim()
+            : null,
+        bhytCode: _bhytController.text.trim().isNotEmpty
+            ? _bhytController.text.trim()
+            : null,
+        identityCard: _cccdController.text.trim().isNotEmpty
+            ? _cccdController.text.trim()
+            : null,
         bloodType: _bloodType,
-        medicalHistory: _historyController.text.trim().isNotEmpty ? _historyController.text.trim() : null,
+        medicalHistory: _historyController.text.trim().isNotEmpty
+            ? _historyController.text.trim()
+            : null,
         isDefault: widget.member?.isDefault ?? false,
+        avatar: widget.member?.avatar,
+        createdAt: widget.member?.createdAt,
       );
 
       FamilyMember saved;
@@ -580,9 +674,8 @@ class _AddEditFamilyMemberDialogState extends State<_AddEditFamilyMemberDialog> 
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi lưu thông tin: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Lỗi lưu thông tin: $e')));
       }
     }
   }
@@ -606,13 +699,22 @@ class _AddEditFamilyMemberDialogState extends State<_AddEditFamilyMemberDialog> 
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      isEdit ? 'Sửa thông tin người thân' : 'Thêm người thân vào gia đình',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    Expanded(
+                      child: Text(
+                        isEdit
+                            ? 'Sửa thông tin người thân'
+                            : 'Thêm người thân vào gia đình',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded),
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: _isSaving
+                          ? null
+                          : () => Navigator.of(context).pop(),
                     ),
                   ],
                 ),
@@ -626,7 +728,9 @@ class _AddEditFamilyMemberDialogState extends State<_AddEditFamilyMemberDialog> 
                     hintText: 'Ví dụ: Trần Thị Mai',
                     prefixIcon: Icon(Icons.person_outline_rounded),
                   ),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Vui lòng nhập họ tên' : null,
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? 'Vui lòng nhập họ tên'
+                      : null,
                 ),
                 const SizedBox(height: 12),
 
@@ -637,18 +741,25 @@ class _AddEditFamilyMemberDialogState extends State<_AddEditFamilyMemberDialog> 
                     labelText: 'Mối quan hệ *',
                     prefixIcon: Icon(Icons.family_restroom_outlined),
                   ),
-                  items: FamilyRelationship.values.map((r) {
-                    return DropdownMenuItem(
-                      value: r,
-                      child: Row(
-                        children: [
-                          Icon(r.icon, size: 18, color: r.color),
-                          const SizedBox(width: 8),
-                          Text(r.label),
-                        ],
-                      ),
-                    );
-                  }).toList(),
+                  items: FamilyRelationship.values
+                      .where(
+                        (r) => widget.member?.isSelf == true
+                            ? r == FamilyRelationship.self
+                            : r != FamilyRelationship.self,
+                      )
+                      .map((r) {
+                        return DropdownMenuItem(
+                          value: r,
+                          child: Row(
+                            children: [
+                              Icon(r.icon, size: 18, color: r.color),
+                              const SizedBox(width: 8),
+                              Text(r.label),
+                            ],
+                          ),
+                        );
+                      })
+                      .toList(),
                   onChanged: (val) {
                     if (val != null) setState(() => _relationship = val);
                   },
@@ -671,7 +782,9 @@ class _AddEditFamilyMemberDialogState extends State<_AddEditFamilyMemberDialog> 
                                 ? '${_dateOfBirth!.day}/${_dateOfBirth!.month}/${_dateOfBirth!.year}'
                                 : 'Chọn ngày',
                             style: TextStyle(
-                              color: _dateOfBirth != null ? Colors.black : Colors.grey.shade600,
+                              color: _dateOfBirth != null
+                                  ? Colors.black
+                                  : Colors.grey.shade600,
                             ),
                           ),
                         ),
@@ -726,11 +839,25 @@ class _AddEditFamilyMemberDialogState extends State<_AddEditFamilyMemberDialog> 
                           DropdownMenuItem(value: 'B+', child: Text('B+')),
                           DropdownMenuItem(value: 'O+', child: Text('O+')),
                           DropdownMenuItem(value: 'AB+', child: Text('AB+')),
+                          DropdownMenuItem(value: 'A-', child: Text('A-')),
+                          DropdownMenuItem(value: 'B-', child: Text('B-')),
+                          DropdownMenuItem(value: 'O-', child: Text('O-')),
+                          DropdownMenuItem(value: 'AB-', child: Text('AB-')),
                         ],
                         onChanged: (v) => setState(() => _bloodType = v),
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+
+                TextFormField(
+                  controller: _cccdController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Số CCCD / Giấy tờ tùy thân (nếu có)',
+                    prefixIcon: Icon(Icons.badge_outlined),
+                  ),
                 ),
                 const SizedBox(height: 12),
 
@@ -752,7 +879,8 @@ class _AddEditFamilyMemberDialogState extends State<_AddEditFamilyMemberDialog> 
                   maxLines: 2,
                   decoration: const InputDecoration(
                     labelText: 'Tiền sử bệnh lý & Dị ứng thuốc',
-                    hintText: 'Ví dụ: Tăng huyết áp 5 năm, dị ứng Penicillin...',
+                    hintText:
+                        'Ví dụ: Tăng huyết áp 5 năm, dị ứng Penicillin...',
                     prefixIcon: Icon(Icons.medical_information_outlined),
                   ),
                 ),
@@ -765,16 +893,23 @@ class _AddEditFamilyMemberDialogState extends State<_AddEditFamilyMemberDialog> 
                   child: FilledButton(
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     onPressed: _isSaving ? null : _save,
                     child: _isSaving
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
                           )
-                        : Text(isEdit ? 'Cập nhật hồ sơ' : 'Lưu hồ sơ người thân'),
+                        : Text(
+                            isEdit ? 'Cập nhật hồ sơ' : 'Lưu hồ sơ người thân',
+                          ),
                   ),
                 ),
               ],

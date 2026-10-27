@@ -1,32 +1,23 @@
-# Smart Hospital backend blueprint
+# Smart Hospital backend
 
-This folder is an AWS SAM blueprint only. It does not create an AWS account,
-deploy an API, create tables, buckets, IAM users, or incur AWS charges.
+- `server.js`, `src/`: máy chủ Node/SQLite demo local. Chạy `npm ci`, `npm test`, `npm start`.
+- `aws/`: backend AWS độc lập, dùng AWS SDK v3, DynamoDB và S3; không dùng SQLite.
+- `template.yaml`: SAM stack Cognito, API Gateway REST, Lambda, DynamoDB và S3.
+- `samconfig.toml`: cấu hình build/deploy mặc định, bật xác nhận change set.
 
-## Local checks
-
-```sh
-npm test
-npm run format:check
-```
-
-If AWS SAM CLI is later installed and cloud resources are approved:
+Xem [hướng dẫn AWS](../docs/AWS_SETUP.md) cho phạm vi endpoint, công cụ,
+đăng nhập profile, build/deploy, tạo cấu hình Flutter và kiểm tra sau triển khai.
+Chưa có tài nguyên AWS hoặc URL API thực tế được tạo trong source này.
 
 ```sh
-sam validate --template template.yaml
-sam local start-api --template template.yaml
+npm ci --prefix aws --ignore-scripts
+npm test --prefix aws
+sam validate --lint --region ap-southeast-1
+sam build
+# Chỉ chạy khi đã chọn đúng tài khoản/profile; lệnh tạo tài nguyên AWS:
+sam deploy --guided --profile smart-hospital --region ap-southeast-1
 ```
 
-The public health endpoint is `GET /health`. All patient and appointment
-endpoints require the Cognito authorizer in the SAM template. `sam local` test
-events must provide a trusted authorizer claim; never bypass ownership checks in
-production.
-
-## Production replacement points
-
-The in-memory repositories exist only for local handler tests. Before any
-deployment, replace them with DynamoDB implementations that use the caller's
-Cognito `sub` as the patient partition key. Add an S3 presigned-URL handler for
-uploads; Flutter must never receive AWS access keys or secret keys.
-
-See the root `README.md` for API contracts, DynamoDB schema, and Flutter setup.
+API AWS không import các handler local có cơ chế giả lập JWT/role, không công
+khai endpoint thanh toán giả lập hoặc hồ sơ xét nghiệm mẫu. Chỉ nguồn
+`aws/` được đóng gói cho Lambda.

@@ -17,7 +17,15 @@ class ApiConfig {
   final String baseUrl;
   final Duration timeout;
 
-  bool get isConfigured => Uri.tryParse(baseUrl)?.hasScheme ?? false;
+  bool get isConfigured {
+    final uri = Uri.tryParse(baseUrl);
+    return uri != null &&
+        ['http', 'https'].contains(uri.scheme) &&
+        uri.host.isNotEmpty &&
+        uri.userInfo.isEmpty &&
+        !uri.hasQuery &&
+        !uri.hasFragment;
+  }
 
   Uri uri(String path, [Map<String, String>? queryParameters]) {
     if (!isConfigured) {

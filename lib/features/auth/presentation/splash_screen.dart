@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../repositories/auth_repository_provider.dart';
+import '../../../core/models/app_user.dart';
 import 'role_home.dart';
 import 'login_screen.dart';
 
@@ -24,14 +25,21 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _start() async {
-    final user = await authRepository.restoreSession();
+    AppUser? user;
+    try {
+      user = await authRepository.restoreSession();
+    } catch (_) {
+      /* A failed remote restore should return to login, not stay on the splash screen. */
+    }
     if (!mounted) return;
+    final restored = user;
     _navigationTimer = Timer(const Duration(milliseconds: 1500), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (_) =>
-                user == null ? const LoginScreen() : homeForRole(user.role),
+            builder: (_) => restored == null
+                ? const LoginScreen()
+                : homeForRole(restored.role, user: restored),
           ),
         );
       }

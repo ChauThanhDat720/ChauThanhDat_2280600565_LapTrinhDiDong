@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/storage/local_json_storage.dart';
+import '../domain/post_care_assistant.dart';
 import '../../../core/utils/app_timezone.dart';
 import '../../appointments/domain/appointment.dart';
 import '../domain/teleconsultation.dart';
@@ -18,7 +20,14 @@ abstract interface class TeleconsultationRepository {
     String? imageUrl,
   });
   Future<void> markAsRead(String sessionId, MessageSenderType readerType);
-  Future<TeleconsultationSession> closeSession(String sessionId, {String? closedByName});
+  Future<TeleconsultationSession> setAutoReplyEnabled(
+    String sessionId,
+    bool enabled,
+  );
+  Future<TeleconsultationSession> closeSession(
+    String sessionId, {
+    String? closedByName,
+  });
 }
 
 class TeleconsultationStore extends ChangeNotifier {
@@ -26,10 +35,72 @@ class TeleconsultationStore extends ChangeNotifier {
   static final instance = TeleconsultationStore._();
 
   final List<TeleconsultationSession> _sessions = [];
+  static const _storageKey = 'post_care_sessions_v1';
+  Future<void>? _loading;
+
+  Future<void> ensureLoaded() => _loading ??= _restore();
+
+  Future<void> _restore() async {
+    try {
+      final saved = await LocalJsonStorage.read(_storageKey);
+      if (saved != null) {
+        _sessions
+          ..clear()
+          ..addAll(saved.map(TeleconsultationSession.fromJson));
+      } else {
+        seedIfEmpty();
+        await LocalJsonStorage.write(
+          _storageKey,
+          _sessions.map((s) => s.toJson()).toList(),
+        );
+      }
+    } catch (_) {
+      _loading = null;
+      rethrow;
+    }
+  }
+
+  Future<void> _commit(List<TeleconsultationSession> sessions) async {
+    await LocalJsonStorage.write(
+      _storageKey,
+      sessions.map((s) => s.toJson()).toList(),
+    );
+    _sessions
+      ..clear()
+      ..addAll(sessions);
+    notifyListeners();
+  }
+
+  Future<void> saveSession(TeleconsultationSession session) =>
+      LocalJsonStorage.exclusive(_storageKey, () async {
+        await ensureLoaded();
+        await _commit([
+          session,
+          ..._sessions.where(
+            (s) =>
+                s.id != session.id && s.appointmentId != session.appointmentId,
+          ),
+        ]);
+      });
+
+  Future<TeleconsultationSession> updateSession(
+    String id,
+    TeleconsultationSession Function(TeleconsultationSession) update,
+  ) => LocalJsonStorage.exclusive(_storageKey, () async {
+    await ensureLoaded();
+    final index = _sessions.indexWhere((s) => s.id == id);
+    if (index < 0) throw StateError('Không tìm thấy phiên tư vấn.');
+    final changed = update(_sessions[index]);
+    final next = List<TeleconsultationSession>.of(_sessions);
+    next[index] = changed;
+    await _commit(next);
+    return changed;
+  });
   List<TeleconsultationSession> get sessions => List.unmodifiable(_sessions);
 
   void clearForTest() {
     _sessions.clear();
+    _loading = null;
     notifyListeners();
   }
 
@@ -148,34 +219,18 @@ class TeleconsultationStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addSession(TeleconsultationSession session) {
-    _sessions.removeWhere((s) => s.id == session.id || s.appointmentId == session.appointmentId);
-    _sessions.insert(0, session);
-    notifyListeners();
-  }
-
-  void replaceSession(TeleconsultationSession session) {
-    final index = _sessions.indexWhere((s) => s.id == session.id);
-    if (index >= 0) {
-      _sessions[index] = session;
-    } else {
-      _sessions.insert(0, session);
-    }
-    notifyListeners();
-  }
-
   TeleconsultationSession? findById(String id) {
     return _sessions.cast<TeleconsultationSession?>().firstWhere(
-          (s) => s?.id == id,
-          orElse: () => null,
-        );
+      (s) => s?.id == id,
+      orElse: () => null,
+    );
   }
 
   TeleconsultationSession? findByAppointmentId(String appointmentId) {
     return _sessions.cast<TeleconsultationSession?>().firstWhere(
-          (s) => s?.appointmentId == appointmentId,
-          orElse: () => null,
-        );
+      (s) => s?.appointmentId == appointmentId,
+      orElse: () => null,
+    );
   }
 }
 
@@ -183,17 +238,21 @@ class LocalTeleconsultationRepository implements TeleconsultationRepository {
   const LocalTeleconsultationRepository();
 
   @override
-  Future<TeleconsultationSession> getOrCreateSession(String appointmentId) async {
-    TeleconsultationStore.instance.seedIfEmpty();
-    var session = TeleconsultationStore.instance.findByAppointmentId(appointmentId);
+  Future<TeleconsultationSession> getOrCreateSession(
+    String appointmentId,
+  ) async {
+    await TeleconsultationStore.instance.ensureLoaded();
+    var session = TeleconsultationStore.instance.findByAppointmentId(
+      appointmentId,
+    );
 
     if (session == null) {
       // Find appointment in AppointmentStore
       final appts = AppointmentStore.instance.appointments;
       final appt = appts.cast<Appointment?>().firstWhere(
-            (a) => a?.id == appointmentId,
-            orElse: () => null,
-          );
+        (a) => a?.id == appointmentId,
+        orElse: () => null,
+      );
 
       final now = AppTimezone.now();
       final expiresAt = now.add(const Duration(days: 7));
@@ -213,7 +272,8 @@ class LocalTeleconsultationRepository implements TeleconsultationRepository {
         senderType: MessageSenderType.system,
         senderId: 'system',
         senderName: 'Hệ thống Bệnh viện',
-        message: 'Chào bạn! Kênh tư vấn y tế hậu khám 7 ngày với $doctorName đã được kích hoạt. Bạn có thể gửi câu hỏi về phản ứng thuốc, liều dùng hoặc hình ảnh triệu chứng tại đây.',
+        message:
+            'Chào bạn! Kênh tư vấn y tế hậu khám 7 ngày với $doctorName đã được kích hoạt. Bạn có thể gửi câu hỏi về phản ứng thuốc, liều dùng hoặc hình ảnh triệu chứng tại đây.',
         isRead: true,
         createdAt: now,
       );
@@ -236,25 +296,29 @@ class LocalTeleconsultationRepository implements TeleconsultationRepository {
         unreadCount: 0,
       );
 
-      TeleconsultationStore.instance.addSession(session);
+      await TeleconsultationStore.instance.saveSession(session);
     }
 
     return session;
   }
 
   @override
-  Future<List<TeleconsultationSession>> getDoctorSessions(String doctorId) async {
-    TeleconsultationStore.instance.seedIfEmpty();
+  Future<List<TeleconsultationSession>> getDoctorSessions(
+    String doctorId,
+  ) async {
+    await TeleconsultationStore.instance.ensureLoaded();
     final all = TeleconsultationStore.instance.sessions;
     if (doctorId == 'all') return all;
     return all.where((s) => s.doctorId == doctorId).toList();
   }
 
   @override
-  Future<List<TeleconsultationSession>> getPatientSessions(String patientId) async {
-    TeleconsultationStore.instance.seedIfEmpty();
+  Future<List<TeleconsultationSession>> getPatientSessions(
+    String patientId,
+  ) async {
+    await TeleconsultationStore.instance.ensureLoaded();
     final all = TeleconsultationStore.instance.sessions;
-    return all.where((s) => s.patientId == patientId || patientId == 'demo-patient').toList();
+    return all.where((s) => s.patientId == patientId).toList();
   }
 
   @override
@@ -266,53 +330,74 @@ class LocalTeleconsultationRepository implements TeleconsultationRepository {
     required String message,
     String? imageUrl,
   }) async {
-    TeleconsultationStore.instance.seedIfEmpty();
-    final session = TeleconsultationStore.instance.findById(sessionId);
-    if (session == null) {
-      throw StateError('Không tìm thấy phiên tư vấn.');
+    if (message.trim().isEmpty && imageUrl == null) {
+      throw ArgumentError('Vui lòng nhập nội dung hoặc chọn ảnh.');
     }
-    if (!session.canChat) {
-      throw StateError('Phiên tư vấn hậu khám này đã kết thúc.');
-    }
-
-    final now = AppTimezone.now();
-    final newMsg = TeleconsultationMessage(
-      id: 'msg-${now.millisecondsSinceEpoch}',
-      sessionId: sessionId,
-      senderType: senderType,
-      senderId: senderId,
-      senderName: senderName,
-      message: message.trim(),
-      imageUrl: imageUrl,
-      isRead: false,
-      createdAt: now,
-    );
-
-    final updatedMessages = [...session.messages, newMsg];
-    final isDoctor = senderType == MessageSenderType.doctor;
-    final unread = isDoctor ? 0 : session.unreadCount + 1;
-
-    final updatedSession = session.copyWith(
-      messages: updatedMessages,
-      lastMessage: message.trim(),
-      lastMessageSender: senderName,
-      lastMessageAt: now,
-      updatedAt: now,
-      unreadCount: unread,
-    );
-
-    TeleconsultationStore.instance.replaceSession(updatedSession);
-    return newMsg;
+    late TeleconsultationMessage sent;
+    await TeleconsultationStore.instance.updateSession(sessionId, (session) {
+      if (!session.canChat) {
+        throw StateError('Phiên tư vấn hậu khám này đã kết thúc.');
+      }
+      final now = AppTimezone.now();
+      final id = DateTime.now().microsecondsSinceEpoch;
+      sent = TeleconsultationMessage(
+        id: 'msg-$id',
+        sessionId: sessionId,
+        senderType: senderType,
+        senderId: senderId,
+        senderName: senderName,
+        message: message.trim(),
+        imageUrl: imageUrl,
+        createdAt: now,
+      );
+      final messages = [...session.messages, sent];
+      if (senderType == MessageSenderType.patient && session.autoReplyEnabled) {
+        messages.add(
+          TeleconsultationMessage(
+            id: 'assistant-$id',
+            sessionId: sessionId,
+            senderType: MessageSenderType.assistant,
+            senderId: 'post-care-assistant',
+            senderName: 'Trợ lý hậu khám tự động',
+            message: const PostCareAssistant().reply(
+              session,
+              message,
+              hasImage: imageUrl != null,
+            ),
+            createdAt: now,
+            isRead: false,
+          ),
+        );
+      }
+      final last = messages.last;
+      return session.copyWith(
+        messages: messages,
+        lastMessage: last.message,
+        lastMessageSender: last.senderName,
+        lastMessageAt: now,
+        updatedAt: now,
+        unreadCount: senderType == MessageSenderType.patient
+            ? session.unreadCount + 1
+            : senderType == MessageSenderType.doctor
+            ? 0
+            : session.unreadCount,
+      );
+    });
+    return sent;
   }
 
   @override
-  Future<void> markAsRead(String sessionId, MessageSenderType readerType) async {
-    final session = TeleconsultationStore.instance.findById(sessionId);
-    if (session == null) return;
-
-    final updatedMessages = session.messages.map((m) {
-      if ((readerType == MessageSenderType.doctor && m.isPatient) ||
-          (readerType == MessageSenderType.patient && m.isDoctor)) {
+  Future<void> markAsRead(
+    String sessionId,
+    MessageSenderType readerType,
+  ) async {
+    await TeleconsultationStore.instance.updateSession(sessionId, (session) {
+      final messages = session.messages.map((m) {
+        final shouldRead = readerType == MessageSenderType.doctor
+            ? m.isPatient
+            : readerType == MessageSenderType.patient &&
+                  (m.isDoctor || m.isAssistant);
+        if (!shouldRead || m.isRead) return m;
         return TeleconsultationMessage(
           id: m.id,
           sessionId: m.sessionId,
@@ -324,45 +409,55 @@ class LocalTeleconsultationRepository implements TeleconsultationRepository {
           isRead: true,
           createdAt: m.createdAt,
         );
-      }
-      return m;
-    }).toList();
-
-    final updatedSession = session.copyWith(
-      messages: updatedMessages,
-      unreadCount: 0,
-    );
-    TeleconsultationStore.instance.replaceSession(updatedSession);
+      }).toList();
+      return session.copyWith(
+        messages: messages,
+        unreadCount: readerType == MessageSenderType.doctor
+            ? 0
+            : session.unreadCount,
+      );
+    });
   }
 
   @override
-  Future<TeleconsultationSession> closeSession(String sessionId, {String? closedByName}) async {
-    final session = TeleconsultationStore.instance.findById(sessionId);
-    if (session == null) {
-      throw StateError('Không tìm thấy phiên tư vấn.');
-    }
+  Future<TeleconsultationSession> setAutoReplyEnabled(
+    String sessionId,
+    bool enabled,
+  ) => TeleconsultationStore.instance.updateSession(sessionId, (session) {
+    if (!session.canChat) throw StateError('Phiên tư vấn đã kết thúc.');
+    return session.copyWith(
+      autoReplyEnabled: enabled,
+      updatedAt: AppTimezone.now(),
+    );
+  });
 
+  @override
+  Future<TeleconsultationSession> closeSession(
+    String sessionId, {
+    String? closedByName,
+  }) => TeleconsultationStore.instance.updateSession(sessionId, (session) {
+    if (session.isClosed) return session;
     final now = AppTimezone.now();
-    final closeMsg = TeleconsultationMessage(
-      id: 'msg-${now.millisecondsSinceEpoch}',
+    final message = TeleconsultationMessage(
+      id: 'close-${DateTime.now().microsecondsSinceEpoch}',
       sessionId: sessionId,
       senderType: MessageSenderType.system,
       senderId: 'system',
       senderName: 'Hệ thống Bệnh viện',
-      message: '${closedByName ?? session.doctorName} đã đóng phiên tư vấn này. Chúc bạn sức khỏe mau bình phục!',
+      message:
+          '${closedByName ?? session.doctorName} đã đóng phiên tư vấn này.',
       isRead: true,
       createdAt: now,
     );
-
-    final updated = session.copyWith(
+    return session.copyWith(
       status: TeleconsultationStatus.closed,
-      messages: [...session.messages, closeMsg],
+      messages: [...session.messages, message],
       updatedAt: now,
+      lastMessage: message.message,
+      lastMessageSender: message.senderName,
+      lastMessageAt: now,
     );
-
-    TeleconsultationStore.instance.replaceSession(updated);
-    return updated;
-  }
+  });
 }
 
 class RemoteTeleconsultationRepository implements TeleconsultationRepository {
@@ -370,14 +465,20 @@ class RemoteTeleconsultationRepository implements TeleconsultationRepository {
   final ApiClient _client;
 
   @override
-  Future<TeleconsultationSession> getOrCreateSession(String appointmentId) async {
-    final res = await _client.get('/teleconsultations/appointment/$appointmentId');
+  Future<TeleconsultationSession> getOrCreateSession(
+    String appointmentId,
+  ) async {
+    final res = await _client.get(
+      '/teleconsultations/appointment/$appointmentId',
+    );
     return TeleconsultationSession.fromJson(res as Map<String, dynamic>);
   }
 
   @override
-  Future<List<TeleconsultationSession>> getDoctorSessions(String doctorId) async {
-    final res = await _client.get('/teleconsultations/doctor/$doctorId');
+  Future<List<TeleconsultationSession>> getDoctorSessions(
+    String doctorId,
+  ) async {
+    final res = await _client.get('/teleconsultations/doctor/me');
     final items = res is Map<String, dynamic> ? res['items'] : res;
     return (items as List? ?? const [])
         .whereType<Map<String, dynamic>>()
@@ -386,8 +487,10 @@ class RemoteTeleconsultationRepository implements TeleconsultationRepository {
   }
 
   @override
-  Future<List<TeleconsultationSession>> getPatientSessions(String patientId) async {
-    final res = await _client.get('/teleconsultations/patient/$patientId');
+  Future<List<TeleconsultationSession>> getPatientSessions(
+    String patientId,
+  ) async {
+    final res = await _client.get('/teleconsultations/patient/me');
     final items = res is Map<String, dynamic> ? res['items'] : res;
     return (items as List? ?? const [])
         .whereType<Map<String, dynamic>>()
@@ -404,6 +507,24 @@ class RemoteTeleconsultationRepository implements TeleconsultationRepository {
     required String message,
     String? imageUrl,
   }) async {
+    String? imageKey;
+    if (imageUrl != null) {
+      if (!imageUrl.startsWith('data:')) {
+        throw ArgumentError('Vui lòng chọn lại ảnh từ thiết bị.');
+      }
+      final data = Uri.parse(imageUrl).data!;
+      final bytes = data.contentAsBytes();
+      final attachment = await _client.post(
+        '/teleconsultations/sessions/$sessionId/attachments',
+        body: {'contentType': data.mimeType, 'size': bytes.length},
+      ) as Map<String, dynamic>;
+      await _client.uploadSigned(
+        attachment['uploadUrl'] as String,
+        bytes,
+        Map<String, String>.from(attachment['headers'] as Map),
+      );
+      imageKey = attachment['objectKey'] as String;
+    }
     final res = await _client.post(
       '/teleconsultations/sessions/$sessionId/messages',
       body: {
@@ -411,14 +532,29 @@ class RemoteTeleconsultationRepository implements TeleconsultationRepository {
         'senderId': senderId,
         'senderName': senderName,
         'message': message,
-        'imageUrl': imageUrl,
+        'imageKey': ?imageKey,
       },
     );
     return TeleconsultationMessage.fromJson(res as Map<String, dynamic>);
   }
 
   @override
-  Future<void> markAsRead(String sessionId, MessageSenderType readerType) async {
+  Future<TeleconsultationSession> setAutoReplyEnabled(
+    String sessionId,
+    bool enabled,
+  ) async {
+    final result = await _client.patch(
+      '/teleconsultations/sessions/$sessionId',
+      body: {'auto_reply_enabled': enabled},
+    );
+    return TeleconsultationSession.fromJson(result as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> markAsRead(
+    String sessionId,
+    MessageSenderType readerType,
+  ) async {
     await _client.post(
       '/teleconsultations/sessions/$sessionId/read',
       body: {'readerType': readerType.name},
@@ -426,7 +562,10 @@ class RemoteTeleconsultationRepository implements TeleconsultationRepository {
   }
 
   @override
-  Future<TeleconsultationSession> closeSession(String sessionId, {String? closedByName}) async {
+  Future<TeleconsultationSession> closeSession(
+    String sessionId, {
+    String? closedByName,
+  }) async {
     final res = await _client.patch(
       '/teleconsultations/sessions/$sessionId/close',
       body: {'closedByName': closedByName},

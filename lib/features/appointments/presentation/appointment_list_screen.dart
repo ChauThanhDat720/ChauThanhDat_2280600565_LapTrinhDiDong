@@ -1,3 +1,5 @@
+import '../../../core/repositories/application_backend.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -24,10 +26,12 @@ class AppointmentListScreen extends StatefulWidget {
   const AppointmentListScreen({
     super.key,
     this.showAppBar = true,
-    this.repository = const LocalAppointmentRepository(),
-  });
+    AppointmentRepository? repository,
+  }) : _providedRepository = repository;
   final bool showAppBar;
-  final AppointmentRepository repository;
+  final AppointmentRepository? _providedRepository;
+  AppointmentRepository get repository =>
+      _providedRepository ?? ApplicationBackend.repositories.appointments;
   @override
   State<AppointmentListScreen> createState() => _AppointmentListScreenState();
 }
@@ -125,11 +129,7 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
         itemBuilder: (context, index) {
           if (index == 0) {
             return Row(
-              children: [
-                
-                const Spacer(),
-                Text('${items.length} lịch khám'),
-              ],
+              children: [const Spacer(), Text('${items.length} lịch khám')],
             );
           }
           final appointment = items[index - 1];
@@ -250,7 +250,9 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
           ListenableBuilder(
             listenable: ClinicalIntakeStore.instance,
             builder: (context, _) {
-              final intake = ClinicalIntakeStore.instance.getByAppointmentId(_appointment.id);
+              final intake = ClinicalIntakeStore.instance.getByAppointmentId(
+                _appointment.id,
+              );
               if (intake != null) {
                 return IntakeSummaryCard(
                   intake: intake,
@@ -260,8 +262,12 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                             MaterialPageRoute(
                               builder: (_) => PreVisitIntakeScreen(
                                 appointment: _appointment,
-                                repository: widget.repository is RemoteAppointmentRepository
-                                    ? const RemoteClinicalIntakeRepository()
+                                repository:
+                                    widget.repository
+                                        is RemoteAppointmentRepository
+                                    ? ApplicationBackend
+                                          .repositories
+                                          .clinicalIntake
                                     : const LocalClinicalIntakeRepository(),
                               ),
                             ),
@@ -277,14 +283,19 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFF0FDFA),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.35)),
+                  border: Border.all(
+                    color: const Color(0xFF0D9488).withValues(alpha: 0.35),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.assignment_outlined, color: AppColors.primary),
+                        const Icon(
+                          Icons.assignment_outlined,
+                          color: AppColors.primary,
+                        ),
                         const SizedBox(width: 8),
                         const Expanded(
                           child: Text(
@@ -297,7 +308,10 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFCCFBF1),
                             borderRadius: BorderRadius.circular(12),
@@ -316,7 +330,11 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                     const SizedBox(height: 8),
                     const Text(
                       'Điền trước thông tin vị trí đau, mức độ khó chịu (thang điểm 1-10) và thuốc đang dùng để Bác sĩ chuẩn bị chu đáo hơn.',
-                      style: TextStyle(color: Color(0xFF134E4A), fontSize: 13, height: 1.35),
+                      style: TextStyle(
+                        color: Color(0xFF134E4A),
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     SizedBox(
@@ -333,15 +351,21 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                             MaterialPageRoute(
                               builder: (_) => PreVisitIntakeScreen(
                                 appointment: _appointment,
-                                repository: widget.repository is RemoteAppointmentRepository
-                                    ? const RemoteClinicalIntakeRepository()
+                                repository:
+                                    widget.repository
+                                        is RemoteAppointmentRepository
+                                    ? ApplicationBackend
+                                          .repositories
+                                          .clinicalIntake
                                     : const LocalClinicalIntakeRepository(),
                               ),
                             ),
                           );
                           if (res != null && mounted) {
                             setState(() {
-                              _appointment = _appointment.copyWith(hasIntake: true);
+                              _appointment = _appointment.copyWith(
+                                hasIntake: true,
+                              );
                             });
                           }
                         },
@@ -353,8 +377,9 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
             },
           ),
         ],
-                if (_appointment.status == AppointmentStatus.completed &&
-            ((_appointment.diagnosis != null && _appointment.diagnosis!.isNotEmpty) ||
+        if (_appointment.status == AppointmentStatus.completed &&
+            ((_appointment.diagnosis != null &&
+                    _appointment.diagnosis!.isNotEmpty) ||
                 (_appointment.prescription != null &&
                     _appointment.prescription!.isNotEmpty))) ...[
           const SizedBox(height: 16),
@@ -363,21 +388,26 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+              border: Border.all(
+                color: AppColors.success.withValues(alpha: 0.3),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.medical_information, color: AppColors.success),
+                    const Icon(
+                      Icons.medical_information,
+                      color: AppColors.success,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'Kết quả khám bệnh & Đơn thuốc',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: AppColors.success,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        color: AppColors.success,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -389,8 +419,10 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   const SizedBox(height: 4),
-                  Text(_appointment.diagnosis!,
-                      style: const TextStyle(fontSize: 14)),
+                  Text(
+                    _appointment.diagnosis!,
+                    style: const TextStyle(fontSize: 14),
+                  ),
                 ],
                 if (_appointment.prescription != null &&
                     _appointment.prescription!.isNotEmpty) ...[
@@ -400,15 +432,18 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   const SizedBox(height: 4),
-                  Text(_appointment.prescription!,
-                      style: const TextStyle(fontSize: 14)),
+                  Text(
+                    _appointment.prescription!,
+                    style: const TextStyle(fontSize: 14),
+                  ),
                   const SizedBox(height: 10),
                   FilledButton.tonalIcon(
                     icon: const Icon(Icons.alarm_add_rounded, size: 18),
                     label: const Text('Tạo lịch nhắc uống thuốc từ toa này'),
                     onPressed: () async {
                       try {
-                        const reminderRepo = RemoteMedicationReminderRepository();
+                        const reminderRepo =
+                            RemoteMedicationReminderRepository();
                         await reminderRepo.createFromPrescription(
                           prescription: _appointment.prescription!,
                           appointmentId: _appointment.id,
@@ -417,7 +452,9 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Đã tạo lịch nhắc uống thuốc thành công từ đơn thuốc!'),
+                            content: Text(
+                              'Đã tạo lịch nhắc uống thuốc thành công từ đơn thuốc!',
+                            ),
                             backgroundColor: AppColors.success,
                           ),
                         );
@@ -446,14 +483,16 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                   Text(
                     _appointment.statusNote!,
                     style: const TextStyle(
-                        fontSize: 14, fontStyle: FontStyle.italic),
+                      fontSize: 14,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                 ],
               ],
             ),
           ),
         ],
-                if (_appointment.status == AppointmentStatus.completed &&
+        if (_appointment.status == AppointmentStatus.completed &&
             _appointment.followUpDate != null) ...[
           const SizedBox(height: 16),
           Container(
@@ -461,14 +500,19 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.35)),
+              border: Border.all(
+                color: const Color(0xFF3B82F6).withValues(alpha: 0.35),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.event_repeat_rounded, color: Color(0xFF2563EB)),
+                    const Icon(
+                      Icons.event_repeat_rounded,
+                      color: Color(0xFF2563EB),
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -485,7 +529,11 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                 const SizedBox(height: 8),
                 Text(
                   'Bác sĩ ${_appointment.doctorName} chỉ định bạn tái khám vào ngày ${_appointment.followUpDateLabel}. Hãy chọn khung giờ thích hợp để được ưu tiên khám đúng hẹn!',
-                  style: const TextStyle(color: Color(0xFF1E3A8A), fontSize: 13, height: 1.35),
+                  style: const TextStyle(
+                    color: Color(0xFF1E3A8A),
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 SizedBox(
@@ -534,14 +582,19 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFFF0FDFA),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.35),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.support_agent_rounded, color: AppColors.primary),
+                    const Icon(
+                      Icons.support_agent_rounded,
+                      color: AppColors.primary,
+                    ),
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
@@ -554,7 +607,10 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFCCFBF1),
                         borderRadius: BorderRadius.circular(12),
@@ -573,7 +629,11 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                 const SizedBox(height: 8),
                 Text(
                   'Bạn có thắc mắc về liều dùng, tác dụng phụ của thuốc hoặc triệu chứng sau khám? Hãy nhắn tin trao đổi trực tiếp với ${_appointment.doctorName}.',
-                  style: const TextStyle(color: Color(0xFF134E4A), fontSize: 13, height: 1.35),
+                  style: const TextStyle(
+                    color: Color(0xFF134E4A),
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 SizedBox(
@@ -583,7 +643,10 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                     ),
-                    icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                    icon: const Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      size: 18,
+                    ),
                     label: Text('Nhắn tin với ${_appointment.doctorName}'),
                     onPressed: () {
                       Navigator.of(context).push(
@@ -608,7 +671,8 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => MedicalRecordPdfPreviewScreen(appointment: _appointment),
+                  builder: (_) =>
+                      MedicalRecordPdfPreviewScreen(appointment: _appointment),
                 ),
               );
             },
@@ -619,12 +683,17 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
               backgroundColor: const Color(0xFFE0F2FE),
               foregroundColor: const Color(0xFF0369A1),
             ),
-            icon: const Icon(Icons.biotech_rounded, size: 20, color: Color(0xFF0284C7)),
+            icon: const Icon(
+              Icons.biotech_rounded,
+              size: 20,
+              color: Color(0xFF0284C7),
+            ),
             label: const Text('Xem Kết quả Xét nghiệm & CĐHA'),
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => LabResultsDetailScreen(appointment: _appointment),
+                  builder: (_) =>
+                      LabResultsDetailScreen(appointment: _appointment),
                 ),
               );
             },
@@ -641,7 +710,8 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                 '1 chạm Đặt lịch tái khám (${_appointment.followUpDateLabel})',
               ),
               onPressed: () {
-                final doc = doctors
+                final doc =
+                    doctors
                         .where((d) => d.id == _appointment.doctorId)
                         .firstOrNull ??
                     Doctor(
@@ -697,7 +767,10 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                       _appointment.reviewNote?.isNotEmpty == true
                           ? '"${_appointment.reviewNote}"'
                           : 'Đã đánh giá ${_appointment.rating} sao',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ],
@@ -724,7 +797,9 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
             _appointment.status != AppointmentStatus.completed) ...[
           const SizedBox(height: 12),
           FilledButton.icon(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0D9488)),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF0D9488),
+            ),
             icon: const Icon(Icons.qr_code_2_rounded),
             label: Text(
               _appointment.status == AppointmentStatus.checkedIn
@@ -754,7 +829,9 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
           onPressed: () async {
             final nav = Navigator.of(context);
             final paymentRepo = LocalPaymentRepository();
-            final invoice = await paymentRepo.getInvoiceForAppointment(_appointment.id);
+            final invoice = await paymentRepo.getInvoiceForAppointment(
+              _appointment.id,
+            );
             if (invoice.isPaid) {
               nav.push(
                 MaterialPageRoute(

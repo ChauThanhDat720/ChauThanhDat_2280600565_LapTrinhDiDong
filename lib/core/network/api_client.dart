@@ -9,7 +9,7 @@ import 'api_exception.dart';
 typedef AccessTokenProvider = Future<String?> Function();
 
 /// Small HTTP client used by remote repositories. It never stores credentials;
-/// a future Cognito integration supplies the short-lived access token.
+/// Cognito supplies a refreshed ID token for the REST API authorizer.
 class ApiClient {
   factory ApiClient({
     required ApiConfig config,
@@ -34,6 +34,43 @@ class ApiClient {
 
   Future<dynamic> patch(String path, {Object? body}) =>
       _send('PATCH', path, body: body);
+
+  /// Upload directly to a server-issued S3 URL. The Cognito token is never
+  /// forwarded to S3; the signed URL authorizes only this individual object.
+  Future<void> uploadSigned(
+    String url,
+    List<int> bytes,
+    Map<String, String> headers,
+  ) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty) {
+      throw const ApiException(message: 'Địa chỉ tải ảnh không hợp lệ.');
+    }
+    try {
+      final response = await _httpClient
+          .put(uri, headers: headers, body: bytes)
+          .timeout(_config.timeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiException(
+          message: 'Không thể tải ảnh lên. Vui lòng thử lại.',
+          statusCode: response.statusCode,
+        );
+      }
+    } on TimeoutException {
+      throw const ApiException(
+        message: 'Tải ảnh quá thời gian chờ.',
+        isNetworkError: true,
+      );
+    } on http.ClientException {
+      throw const ApiException(
+        message: 'Không thể kết nối khi tải ảnh.',
+        isNetworkError: true,
+      );
+    }
+  }
 
   Future<dynamic> _send(
     String method,

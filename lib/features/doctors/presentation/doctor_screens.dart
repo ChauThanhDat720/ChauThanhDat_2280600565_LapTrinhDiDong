@@ -1,3 +1,6 @@
+import '../../../core/config/aws_config.dart';
+import '../../../core/repositories/application_backend.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -22,11 +25,55 @@ class DoctorListScreen extends StatefulWidget {
 class _DoctorListScreenState extends State<DoctorListScreen> {
   late String? _departmentId = widget.initialDepartmentId;
   String _query = '';
+  List<Doctor> _catalog = doctors;
+  bool _loading = false;
+  Object? _catalogError;
+  @override
+  void initState() {
+    super.initState();
+    if (AwsConfig.useAws) _loadCatalog();
+  }
+
+  Future<void> _loadCatalog() async {
+    setState(() {
+      _loading = true;
+      _catalogError = null;
+    });
+    try {
+      final catalog = await ApplicationBackend.repositories.doctors
+          .getDoctors();
+      if (mounted) setState(() => _catalog = catalog);
+    } catch (error) {
+      if (mounted) setState(() => _catalogError = error);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Bác sĩ')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_catalogError != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Bác sĩ')),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Không thể tải danh sách bác sĩ.'),
+              TextButton(onPressed: _loadCatalog, child: const Text('Thử lại')),
+            ],
+          ),
+        ),
+      );
+    }
     final query = _query.trim().toLowerCase();
-    final visible = doctors.where((doctor) {
+    final visible = _catalog.where((doctor) {
       final matchesDepartment =
           _departmentId == null || doctor.departmentId == _departmentId;
       final matchesQuery =
@@ -229,15 +276,17 @@ class BookAppointmentScreen extends StatefulWidget {
   const BookAppointmentScreen({
     super.key,
     required this.doctor,
-    this.repository = const LocalAppointmentRepository(),
+    AppointmentRepository? repository,
     this.nowProvider,
     this.initialDate,
     this.initialReason,
     this.isFollowUp = false,
     this.parentAppointmentId,
-  });
+  }) : _providedRepository = repository;
   final Doctor doctor;
-  final AppointmentRepository repository;
+  final AppointmentRepository? _providedRepository;
+  AppointmentRepository get repository =>
+      _providedRepository ?? ApplicationBackend.repositories.appointments;
   final DateTime Function()? nowProvider;
   final DateTime? initialDate;
   final String? initialReason;
@@ -452,8 +501,11 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.event_repeat_rounded,
-                          color: Color(0xFFD97706), size: 24),
+                      const Icon(
+                        Icons.event_repeat_rounded,
+                        color: Color(0xFFD97706),
+                        size: 24,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(

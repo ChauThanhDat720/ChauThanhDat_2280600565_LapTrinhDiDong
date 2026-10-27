@@ -2,7 +2,7 @@ import '../../../core/utils/app_timezone.dart';
 
 enum TeleconsultationStatus { active, closed, expired }
 
-enum MessageSenderType { patient, doctor, system }
+enum MessageSenderType { patient, doctor, system, assistant }
 
 class TeleconsultationMessage {
   const TeleconsultationMessage({
@@ -29,6 +29,7 @@ class TeleconsultationMessage {
 
   bool get isPatient => senderType == MessageSenderType.patient;
   bool get isDoctor => senderType == MessageSenderType.doctor;
+  bool get isAssistant => senderType == MessageSenderType.assistant;
   bool get isSystem => senderType == MessageSenderType.system;
 
   String get formattedTime {
@@ -39,8 +40,11 @@ class TeleconsultationMessage {
 
   factory TeleconsultationMessage.fromJson(Map<String, dynamic> json) {
     MessageSenderType type;
-    final rawType = (json['sender_type'] ?? json['senderType'] ?? 'patient').toString();
-    if (rawType == 'doctor') {
+    final rawType = (json['sender_type'] ?? json['senderType'] ?? 'patient')
+        .toString();
+    if (rawType == 'assistant') {
+      type = MessageSenderType.assistant;
+    } else if (rawType == 'doctor') {
       type = MessageSenderType.doctor;
     } else if (rawType == 'system') {
       type = MessageSenderType.system;
@@ -56,24 +60,27 @@ class TeleconsultationMessage {
       senderName: (json['sender_name'] ?? json['senderName'] ?? '') as String,
       message: (json['message'] ?? '') as String,
       imageUrl: (json['image_url'] ?? json['imageUrl']) as String?,
-      isRead: json['is_read'] == true || json['is_read'] == 1 || json['isRead'] == true,
+      isRead:
+          json['is_read'] == true ||
+          json['is_read'] == 1 ||
+          json['isRead'] == true,
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String).toLocal()
+          ? AppTimezone.fromUtc(DateTime.parse(json['created_at'] as String))
           : AppTimezone.now(),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'session_id': sessionId,
-        'sender_type': senderType.name,
-        'sender_id': senderId,
-        'sender_name': senderName,
-        'message': message,
-        'image_url': imageUrl,
-        'is_read': isRead,
-        'created_at': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'session_id': sessionId,
+    'sender_type': senderType.name,
+    'sender_id': senderId,
+    'sender_name': senderName,
+    'message': message,
+    'image_url': imageUrl,
+    'is_read': isRead,
+    'created_at': AppTimezone.toUtc(createdAt).toIso8601String(),
+  };
 }
 
 class TeleconsultationSession {
@@ -96,6 +103,7 @@ class TeleconsultationSession {
     this.lastMessage,
     this.lastMessageSender,
     this.lastMessageAt,
+    this.autoReplyEnabled = true,
   });
 
   final String id;
@@ -116,6 +124,7 @@ class TeleconsultationSession {
   final String? lastMessage;
   final String? lastMessageSender;
   final DateTime? lastMessageAt;
+  final bool autoReplyEnabled;
 
   bool get isExpired =>
       status == TeleconsultationStatus.expired ||
@@ -129,7 +138,7 @@ class TeleconsultationSession {
     final now = AppTimezone.now();
     final diff = expiresAt.difference(now);
     if (diff.isNegative) return 0;
-    return diff.inDays + (diff.inHours % 24 > 0 ? 1 : 0);
+    return (diff.inMilliseconds / Duration.millisecondsPerDay).ceil();
   }
 
   String get remainingLabel {
@@ -159,6 +168,7 @@ class TeleconsultationSession {
     String? lastMessage,
     String? lastMessageSender,
     DateTime? lastMessageAt,
+    bool? autoReplyEnabled,
   }) {
     return TeleconsultationSession(
       id: id ?? this.id,
@@ -179,6 +189,7 @@ class TeleconsultationSession {
       lastMessage: lastMessage ?? this.lastMessage,
       lastMessageSender: lastMessageSender ?? this.lastMessageSender,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+      autoReplyEnabled: autoReplyEnabled ?? this.autoReplyEnabled,
     );
   }
 
@@ -201,9 +212,11 @@ class TeleconsultationSession {
 
     return TeleconsultationSession(
       id: json['id'] as String,
-      appointmentId: (json['appointment_id'] ?? json['appointmentId']) as String,
+      appointmentId:
+          (json['appointment_id'] ?? json['appointmentId']) as String,
       patientId: (json['patient_id'] ?? json['patientId']) as String,
-      patientName: (json['patient_name'] ?? json['patientName'] ?? '') as String,
+      patientName:
+          (json['patient_name'] ?? json['patientName'] ?? '') as String,
       doctorId: (json['doctor_id'] ?? json['doctorId']) as String,
       doctorName: (json['doctor_name'] ?? json['doctorName'] ?? '') as String,
       department: (json['department'] ?? '') as String,
@@ -211,40 +224,51 @@ class TeleconsultationSession {
       prescription: json['prescription'] as String?,
       status: parsedStatus,
       expiresAt: json['expires_at'] != null
-          ? DateTime.parse(json['expires_at'] as String).toLocal()
+          ? AppTimezone.fromUtc(DateTime.parse(json['expires_at'] as String))
           : AppTimezone.now().add(const Duration(days: 7)),
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String).toLocal()
+          ? AppTimezone.fromUtc(DateTime.parse(json['created_at'] as String))
           : AppTimezone.now(),
       updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String).toLocal()
+          ? AppTimezone.fromUtc(DateTime.parse(json['updated_at'] as String))
           : AppTimezone.now(),
       messages: messageList,
       unreadCount: (json['unreadCount'] ?? json['unread_count'] ?? 0) as int,
       lastMessage: (json['lastMessage'] ?? json['last_message']) as String?,
-      lastMessageSender: (json['lastMessageSender'] ?? json['last_message_sender']) as String?,
-      lastMessageAt: json['lastMessageAt'] != null
-          ? DateTime.parse(json['lastMessageAt'] as String).toLocal()
+      lastMessageSender:
+          (json['lastMessageSender'] ?? json['last_message_sender']) as String?,
+      lastMessageAt: (json['lastMessageAt'] ?? json['last_message_at']) != null
+          ? AppTimezone.fromUtc(
+              DateTime.parse(
+                (json['lastMessageAt'] ?? json['last_message_at']) as String,
+              ),
+            )
           : null,
+      autoReplyEnabled: json['auto_reply_enabled'] as bool? ?? true,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'appointment_id': appointmentId,
-        'patient_id': patientId,
-        'patient_name': patientName,
-        'doctor_id': doctorId,
-        'doctor_name': doctorName,
-        'department': department,
-        'diagnosis': diagnosis,
-        'prescription': prescription,
-        'status': status.name,
-        'expires_at': expiresAt.toIso8601String(),
-        'created_at': createdAt.toIso8601String(),
-        'updated_at': updatedAt.toIso8601String(),
-        'messages': messages.map((m) => m.toJson()).toList(),
-        'unreadCount': unreadCount,
-        'lastMessage': lastMessage,
-      };
+    'id': id,
+    'appointment_id': appointmentId,
+    'patient_id': patientId,
+    'patient_name': patientName,
+    'doctor_id': doctorId,
+    'doctor_name': doctorName,
+    'department': department,
+    'diagnosis': diagnosis,
+    'prescription': prescription,
+    'status': status.name,
+    'expires_at': AppTimezone.toUtc(expiresAt).toIso8601String(),
+    'created_at': AppTimezone.toUtc(createdAt).toIso8601String(),
+    'updated_at': AppTimezone.toUtc(updatedAt).toIso8601String(),
+    'messages': messages.map((m) => m.toJson()).toList(),
+    'unreadCount': unreadCount,
+    'lastMessage': lastMessage,
+    'lastMessageSender': lastMessageSender,
+    'lastMessageAt': lastMessageAt == null
+        ? null
+        : AppTimezone.toUtc(lastMessageAt!).toIso8601String(),
+    'auto_reply_enabled': autoReplyEnabled,
+  };
 }
