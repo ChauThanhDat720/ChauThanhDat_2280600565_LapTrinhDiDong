@@ -334,7 +334,7 @@ class _VietQrPaymentScreenState extends State<VietQrPaymentScreen> {
                   keyboardType: TextInputType.text,
                   decoration: const InputDecoration(
                     labelText: 'Số tài khoản ngân hàng của bạn',
-                    hintText: 'VD: 050902185537 hoặc 1903...',
+                    hintText: 'VD: 0355157761 hoặc 1903...',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.credit_card_rounded),
                   ),

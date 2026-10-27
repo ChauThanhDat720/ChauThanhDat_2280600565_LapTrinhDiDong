@@ -293,7 +293,7 @@ export const initSchema = async () => {
       payment_ref TEXT UNIQUE NOT NULL,
       bank_name TEXT DEFAULT 'MBBank',
       bank_bin TEXT DEFAULT '970422',
-      bank_account_number TEXT DEFAULT '050902185537',
+      bank_account_number TEXT DEFAULT '0355157761',
       bank_account_name TEXT DEFAULT 'CHAU THANH DAT',
       bank_transaction_id TEXT,
       paid_amount INTEGER DEFAULT 0,
@@ -301,6 +301,12 @@ export const initSchema = async () => {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+  `);
+
+  await run(`
+    UPDATE hospital_invoices
+    SET bank_account_number = '0355157761'
+    WHERE bank_account_number = '050902185537';
   `);
 
   await run(`

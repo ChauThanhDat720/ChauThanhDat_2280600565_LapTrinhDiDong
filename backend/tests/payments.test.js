@@ -19,10 +19,10 @@ test('Hospital Payments: Create Invoice with MB Bank details & VietQR URL', asyn
   assert.equal(invoice.total_amount, 200000);
   assert.equal(invoice.payment_status, 'unpaid');
   assert.equal(invoice.bank_name, 'MBBank');
-  assert.equal(invoice.bank_account_number, '050902185537');
+  assert.equal(invoice.bank_account_number, '0355157761');
   assert.equal(invoice.bank_account_name, 'CHAU THANH DAT');
   assert.ok(invoice.payment_ref.startsWith('VP'));
-  assert.ok(invoice.viet_qr_url.includes('970422-050902185537'));
+  assert.ok(invoice.viet_qr_url.includes('970422-0355157761'));
   assert.ok(invoice.viet_qr_url.includes('CHAU%20THANH%20DAT'));
 });
 
@@ -31,7 +31,7 @@ test('Hospital Payments: Get or Auto-create Invoice for Appointment', async () =
   assert.ok(invoice);
   assert.equal(invoice.appointment_id, 'apt-auto-102');
   assert.equal(invoice.examination_fee, 150000);
-  assert.equal(invoice.bank_account_number, '050902185537');
+  assert.equal(invoice.bank_account_number, '0355157761');
 });
 
 test('Hospital Payments: Process Bank Webhook with matching Payment Ref', async () => {
@@ -101,7 +101,7 @@ test('Hospital Payments: Daily Reconciliation Report is Balanced', async () => {
   assert.ok(report.totalInvoices >= 1);
   assert.ok(report.paidInvoices >= 1);
   assert.ok(report.totalRevenueVnd >= 150000);
-  assert.equal(report.bankAccount.bankAccountNumber, '050902185537');
+  assert.equal(report.bankAccount.bankAccountNumber, '0355157761');
 });
 
 test('Hospital Payments: HTTP Handler GET /payments/reconciliation & POST /payments/simulate', async () => {

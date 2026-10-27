@@ -466,7 +466,7 @@ class LocalPaymentRepository implements PaymentRepository {
       'reconciliationStatus': 'BALANCED',
       'bankAccount': {
         'bankName': 'MBBank',
-        'bankAccountNumber': '050902185537',
+        'bankAccountNumber': '0355157761',
         'bankAccountName': 'CHAU THANH DAT',
       },
     };

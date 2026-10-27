@@ -3,7 +3,7 @@ import { all, get, run } from '../database/db.js';
 export const DEFAULT_BANK_CONFIG = {
   bankName: 'MBBank',
   bankBin: '970422',
-  bankAccountNumber: '050902185537',
+  bankAccountNumber: '0355157761',
   bankAccountName: 'CHAU THANH DAT',
 };
 

@@ -16,7 +16,7 @@ void main() {
     test('generateEmvcoString builds standard NAPAS 247 EMVCo payload', () {
       final emvco = VietQrHelper.generateEmvcoString(
         bankBin: '970422',
-        accountNumber: '050902185537',
+        accountNumber: '0355157761',
         amount: 150000,
         memo: 'VP101_DAT',
       );
@@ -24,7 +24,7 @@ void main() {
       expect(emvco.startsWith('000201'), isTrue); // EMVCo Header
       expect(emvco.contains('A000000727'), isTrue); // NAPAS AID
       expect(emvco.contains('970422'), isTrue); // MB Bank BIN
-      expect(emvco.contains('050902185537'), isTrue); // MB Account Number
+      expect(emvco.contains('0355157761'), isTrue); // MB Account Number
       expect(emvco.contains('VP101_DAT'), isTrue); // Payment Reference
       expect(emvco.contains('704'), isTrue); // Currency VND
       expect(emvco.length, greaterThan(60));
@@ -33,7 +33,7 @@ void main() {
     test('generateEmvcoString handles 2.000d test amount', () {
       final emvco = VietQrHelper.generateEmvcoString(
         bankBin: '970422',
-        accountNumber: '050902185537',
+        accountNumber: '0355157761',
         amount: 2000,
         memo: 'VPTEST',
       );
@@ -53,7 +53,7 @@ void main() {
       final invoice = await repository.getInvoiceForAppointment('APT-101');
       expect(invoice.id, 'inv-101');
       expect(invoice.totalAmount, 150000);
-      expect(invoice.bankAccountNumber, '050902185537');
+      expect(invoice.bankAccountNumber, '0355157761');
       expect(invoice.bankAccountName, 'CHAU THANH DAT');
     });
 
@@ -71,7 +71,7 @@ void main() {
       expect(report['reconciliationStatus'], 'BALANCED');
       expect(report['discrepancyVnd'], 0);
       expect(report['totalInvoices'], greaterThanOrEqualTo(3));
-      expect(report['bankAccount']['bankAccountNumber'], '050902185537');
+      expect(report['bankAccount']['bankAccountNumber'], '0355157761');
     });
   });
 
@@ -97,7 +97,7 @@ void main() {
 
       expect(find.text('Thanh toán Viện phí VietQR'), findsOneWidget);
       expect(find.text('MB BANK'), findsOneWidget);
-      expect(find.text('050902185537'), findsOneWidget);
+      expect(find.text('0355157761'), findsOneWidget);
       expect(find.text('CHAU THANH DAT'), findsOneWidget);
       expect(find.textContaining('Mô phỏng Ngân hàng duyệt tiền'), findsOneWidget);
 

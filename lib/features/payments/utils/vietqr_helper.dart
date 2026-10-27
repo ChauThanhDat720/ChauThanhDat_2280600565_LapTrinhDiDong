@@ -123,7 +123,7 @@ class BankAccountConfigStore extends ChangeNotifier {
   String _bankCode = 'MBBank';
   String _bankName = 'MBBank';
   String _bankBin = '970422';
-  String _accountNumber = '050902185537';
+  String _accountNumber = '0355157761';
   String _accountName = 'CHAU THANH DAT';
   bool _loaded = false;
 
@@ -143,7 +143,13 @@ class BankAccountConfigStore extends ChangeNotifier {
     _bankCode = prefs.getString(_bankCodeKey) ?? _bankCode;
     _bankName = prefs.getString(_bankNameKey) ?? _bankName;
     _bankBin = prefs.getString(_bankBinKey) ?? _bankBin;
-    _accountNumber = prefs.getString(_accountNumberKey) ?? _accountNumber;
+    final savedAcc = prefs.getString(_accountNumberKey);
+    if (savedAcc != null && savedAcc != '050902185537') {
+      _accountNumber = savedAcc;
+    } else if (savedAcc == '050902185537') {
+      _accountNumber = '0355157761';
+      await prefs.setString(_accountNumberKey, _accountNumber);
+    }
     _accountName = prefs.getString(_accountNameKey) ?? _accountName;
     _loaded = true;
     notifyListeners();
@@ -198,7 +204,7 @@ class VietQrHelper {
   /// Tạo chuỗi EMVCo VietQR chuẩn của Ngân hàng Nhà nước & Napas 247
   static String generateEmvcoString({
     String bankBin = '970422', // MB Bank
-    String accountNumber = '050902185537',
+    String accountNumber = '0355157761',
     int amount = 150000,
     String memo = 'VP101',
   }) {
