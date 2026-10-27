@@ -38,6 +38,10 @@ class _VietQrPaymentScreenState extends State<VietQrPaymentScreen> {
     super.initState();
     _invoice = widget.invoice;
     _repository = widget.repository ?? LocalPaymentRepository();
+    BankAccountConfigStore.instance.addListener(_onBankConfigChanged);
+    BankAccountConfigStore.instance.load().then((_) {
+      if (mounted) _onBankConfigChanged();
+    });
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
@@ -50,8 +54,23 @@ class _VietQrPaymentScreenState extends State<VietQrPaymentScreen> {
     });
   }
 
+  void _onBankConfigChanged() {
+    if (!mounted) return;
+    final cfg = BankAccountConfigStore.instance;
+    setState(() {
+      _invoice = _invoice.copyWith(
+        bankName: cfg.bankName,
+        bankBin: cfg.bankBin,
+        bankAccountNumber: cfg.accountNumber,
+        bankAccountName: cfg.accountName,
+        vietQrUrl: '',
+      );
+    });
+  }
+
   @override
   void dispose() {
+    BankAccountConfigStore.instance.removeListener(_onBankConfigChanged);
     _countdownTimer?.cancel();
     super.dispose();
   }
@@ -132,6 +151,154 @@ class _VietQrPaymentScreenState extends State<VietQrPaymentScreen> {
         );
       }
     }
+  }
+
+  void _showBankConfigDialog() {
+    final store = BankAccountConfigStore.instance;
+    VietQrBank selectedBank = store.currentBank;
+    final accNumberCtrl = TextEditingController(text: _invoice.bankAccountNumber);
+    final accNameCtrl = TextEditingController(text: _invoice.bankAccountName);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.account_balance_rounded,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Cấu hình Tài khoản Ngân hàng nhận tiền thật',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Nhập tài khoản ngân hàng của bạn để sinh mã VietQR NAPAS 247 chuẩn. Bạn có thể dùng app ngân hàng quét mã và chuyển tiền thật trực tiếp vào tài khoản này.',
+                  style: TextStyle(fontSize: 12.5, color: Color(0xFF475569)),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<VietQrBank>(
+                  initialValue: selectedBank,
+                  decoration: const InputDecoration(
+                    labelText: 'Chọn Ngân hàng thụ hưởng',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.account_balance_outlined),
+                  ),
+                  items: BankAccountConfigStore.supportedBanks
+                      .map(
+                        (b) => DropdownMenuItem(
+                          value: b,
+                          child: Text(
+                            '${b.shortName} - ${b.fullName}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setModalState(() => selectedBank = val);
+                    }
+                  },
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: accNumberCtrl,
+                  keyboardType: TextInputType.text,
+                  decoration: const InputDecoration(
+                    labelText: 'Số tài khoản ngân hàng của bạn',
+                    hintText: 'VD: 050902185537 hoặc 1903...',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.credit_card_rounded),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: accNameCtrl,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: 'Tên chủ tài khoản (IN HOA KHÔNG DẤU)',
+                    hintText: 'VD: NGUYEN VAN A',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.person_outline_rounded),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.qr_code_2_rounded),
+                    label: const Text(
+                      'Lưu & Tạo Mã VietQR Tài khoản của tôi',
+                    ),
+                    onPressed: () async {
+                      final numStr = accNumberCtrl.text.trim();
+                      final nameStr = accNameCtrl.text.trim().toUpperCase();
+                      if (numStr.isEmpty || nameStr.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Vui lòng nhập đầy đủ Số tài khoản và Tên chủ tài khoản!',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                      await BankAccountConfigStore.instance.updateAccount(
+                        bank: selectedBank,
+                        accountNumber: numStr,
+                        accountName: nameStr,
+                      );
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Đã cập nhật mã QR nhận tiền sang ${selectedBank.shortName} - $numStr ($nameStr)!',
+                            ),
+                            backgroundColor: const Color(0xFF16A34A),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _showPaidSuccessDialog(Invoice invoice) {
@@ -230,6 +397,11 @@ class _VietQrPaymentScreenState extends State<VietQrPaymentScreen> {
         title: const Text('Thanh toán Viện phí VietQR'),
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.manage_accounts_rounded),
+            tooltip: 'Cài đặt TK Ngân hàng nhận tiền của tôi',
+            onPressed: _showBankConfigDialog,
+          ),
           if (isAlreadyPaid)
             IconButton(
               icon: const Icon(Icons.receipt_long_rounded),
@@ -424,7 +596,7 @@ class _VietQrPaymentScreenState extends State<VietQrPaymentScreen> {
               ),
               child: Column(
                 children: [
-                  // Logo VietQR & MB Bank
+                  // Logo VietQR & Ngân hàng thụ hưởng
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -434,9 +606,9 @@ class _VietQrPaymentScreenState extends State<VietQrPaymentScreen> {
                           color: const Color(0xFF003B95),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: const Text(
-                          'MB BANK',
-                          style: TextStyle(
+                        child: Text(
+                          BankAccountConfigStore.instance.currentBank.shortName,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 1,
@@ -530,15 +702,34 @@ class _VietQrPaymentScreenState extends State<VietQrPaymentScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Thông tin chuyển khoản thụ hưởng',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Thông tin chuyển khoản thụ hưởng',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _showBankConfigDialog,
+                        icon: const Icon(Icons.edit_rounded, size: 15),
+                        label: const Text(
+                          'Đổi sang TK của tôi',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   _bankInfoRow(
                     'Ngân hàng',
-                    'MB Bank (Ngân hàng Quân Đội)',
-                    onCopy: () => _copyToClipboard('MBBank', 'Ngân hàng'),
+                    BankAccountConfigStore.instance.currentBank.fullName,
+                    onCopy: () => _copyToClipboard(_invoice.bankName, 'Ngân hàng'),
                   ),
                   const Divider(height: 16),
                   _bankInfoRow(
