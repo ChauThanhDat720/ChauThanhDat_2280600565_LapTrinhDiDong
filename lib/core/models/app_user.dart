@@ -8,10 +8,11 @@ class AppUser {
     required this.role,
     this.phoneNumber,
     this.doctorId,
+    this.department,
     this.createdAt,
   });
   final String id, fullName, email;
-  final String? phoneNumber, doctorId;
+  final String? phoneNumber, doctorId, department;
   final UserRole role;
   final DateTime? createdAt;
 }

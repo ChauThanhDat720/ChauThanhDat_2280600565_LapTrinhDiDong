@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../repositories/auth_repository.dart';
 import '../repositories/auth_repository_provider.dart';
 import 'forgot_password_screen.dart';
 import 'role_home.dart';
@@ -21,6 +23,27 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
   bool _loading = false;
   bool _isDoctorMode = false;
+  bool _rememberMe = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRememberedAccount();
+  }
+
+  Future<void> _loadRememberedAccount() async {
+    final prefs = await SharedPreferences.getInstance();
+    final remembered = prefs.getBool('auth_remember_me') ?? false;
+    if (remembered && mounted) {
+      final savedEmail = prefs.getString('auth_remembered_email') ?? '';
+      final isDoc = prefs.getBool('auth_remembered_is_doctor') ?? false;
+      setState(() {
+        _rememberMe = true;
+        _email.text = savedEmail;
+        _isDoctorMode = isDoc;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -40,18 +63,32 @@ class _LoginScreenState extends State<LoginScreen> {
         demoName: _name.text.trim(),
       );
       if (user == null) throw StateError('No signed-in user');
+
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberMe) {
+        await prefs.setBool('auth_remember_me', true);
+        await prefs.setString('auth_remembered_email', _email.text.trim());
+        await prefs.setBool('auth_remembered_is_doctor', _isDoctorMode);
+      } else {
+        await prefs.setBool('auth_remember_me', false);
+        await prefs.remove('auth_remembered_email');
+        await prefs.remove('auth_remembered_is_doctor');
+      }
+
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => homeForRole(user.role, user: user)),
         (_) => false,
       );
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
+        final message = e is AuthRepositoryException
+            ? e.message
+            : 'Không thể đăng nhập. Kiểm tra email, mật khẩu hoặc kết nối mạng.';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Không thể đăng nhập. Kiểm tra email, mật khẩu hoặc kết nối mạng.',
-            ),
+          SnackBar(
+            backgroundColor: Colors.red.shade700,
+            content: Text(message),
           ),
         );
       }
@@ -82,7 +119,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    _isDoctorMode ? 'Cổng Bác sĩ & Bệnh án Điện tử (EMR/HIS)' : 'Đăng nhập để quản lý lịch khám và sức khỏe gia đình.',
+                    _isDoctorMode
+                        ? 'Cổng Bác sĩ & Bệnh án Điện tử (EMR/HIS)'
+                        : 'Đăng nhập để quản lý lịch khám và sức khỏe gia đình.',
                     style: const TextStyle(color: AppColors.mutedText),
                   ),
                   const SizedBox(height: 20),
@@ -101,8 +140,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             onTap: () {
                               setState(() {
                                 _isDoctorMode = false;
-                                _email.clear();
-                                _password.clear();
                               });
                             },
                             borderRadius: BorderRadius.circular(10),
@@ -125,6 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
                                     Icons.person_outline,
@@ -159,8 +197,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             onTap: () {
                               setState(() {
                                 _isDoctorMode = true;
-                                _email.text = 'doctor.linh@hospital.com';
-                                _password.text = '123456';
                               });
                             },
                             borderRadius: BorderRadius.circular(10),
@@ -183,6 +219,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
                                     Icons.medical_services_outlined,
@@ -238,7 +275,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Khu vực giới hạn bảo mật EMR/HIS: Dành riêng cho Bác sĩ có chứng chỉ hành nghề được cấp phép.',
+                              'Khu vực EMR/HIS bảo mật: Dành riêng cho Bác sĩ & Cán bộ y tế được cấp tài khoản.',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Color(0xFF0D9488),
@@ -258,6 +295,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       labelText: _isDoctorMode
                           ? 'Mã Bác sĩ / Email Bệnh viện'
                           : 'Email',
+                      hintText: _isDoctorMode
+                          ? 'doctor.linh@hospital.com'
+                          : 'patient.an@hospital.com',
                       prefixIcon: Icon(
                         _isDoctorMode
                             ? Icons.badge_outlined
@@ -272,8 +312,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     obscureText: _obscure,
                     decoration: InputDecoration(
                       labelText: _isDoctorMode
-                          ? 'Mật khẩu bảo mật Y tế'
-                          : 'Password',
+                          ? 'Mật khẩu Bác sĩ'
+                          : 'Mật khẩu',
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -285,21 +325,64 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     validator: (value) => value == null || value.length < 6
-                        ? 'Password must have at least 6 characters'
+                        ? 'Mật khẩu phải có ít nhất 6 ký tự'
                         : null,
                   ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const ForgotPasswordScreen(),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: () => setState(() => _rememberMe = !_rememberMe),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: Checkbox(
+                                    value: _rememberMe,
+                                    activeColor: AppColors.primary,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    onChanged: (val) =>
+                                        setState(() => _rememberMe = val ?? false),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Flexible(
+                                  child: Text(
+                                    'Ghi nhớ tài khoản',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.text,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                      child: const Text('Quên mật khẩu?'),
-                    ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ForgotPasswordScreen(),
+                          ),
+                        ),
+                        child: const Text('Quên mật khẩu?'),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: _loading ? null : _login,
                     child: _loading
@@ -314,7 +397,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         : Text(
                             _isDoctorMode
                                 ? 'Đăng nhập Bàn khám Bác sĩ'
-                                : 'Sign in',
+                                : 'Đăng nhập',
                           ),
                   ),
                   const SizedBox(height: 24),
@@ -324,7 +407,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 12),
                         child: Text(
-                          'NEW TO SMART HOSPITAL',
+                          'BẠN CHƯA CÓ TÀI KHOẢN?',
                           style: TextStyle(
                             fontSize: 11,
                             color: AppColors.mutedText,
@@ -342,70 +425,19 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                    ),
-                    child: const Text('Create patient account'),
+                    onPressed: () async {
+                      final registeredEmail = await Navigator.of(context).push<String>(
+                        MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                      );
+                      if (registeredEmail != null && registeredEmail.isNotEmpty) {
+                        setState(() {
+                          _email.text = registeredEmail;
+                          _isDoctorMode = false;
+                        });
+                      }
+                    },
+                    child: const Text('Đăng ký tài khoản Bệnh nhân'),
                   ),
-                  const SizedBox(height: 16),
-                  if (authRepository.isDemo)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF0D9488),
-                              side: const BorderSide(color: Color(0xFF0D9488)),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            icon: const Icon(
-                              Icons.medical_services_rounded,
-                              size: 18,
-                            ),
-                            label: const Text(
-                              'BS. Linh Demo',
-                              style: TextStyle(fontSize: 12.5),
-                            ),
-                            onPressed: () {
-                              _email.text = 'doctor.linh@hospital.com';
-                              _password.text = '123456';
-                              _login();
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              side: const BorderSide(color: AppColors.primary),
-                            ),
-                            icon: const Icon(Icons.person_rounded, size: 18),
-                            label: const Text(
-                              'Bệnh nhân Demo',
-                              style: TextStyle(fontSize: 12.5),
-                            ),
-                            onPressed: () {
-                              _email.text = 'patient.an@hospital.com';
-                              _password.text = '123456';
-                              _login();
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  const SizedBox(height: 24),
-                  if (authRepository.isDemo)
-                    const Center(
-                      child: Text(
-                        'Tài khoản Cán bộ Y tế / Bác sĩ: doctor.linh@hospital.com',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppColors.mutedText,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -417,9 +449,9 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 String? emailValidator(String? value) {
-  if (value == null || value.trim().isEmpty) return 'Please enter your email';
+  if (value == null || value.trim().isEmpty) return 'Vui lòng nhập địa chỉ email';
   if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value)) {
-    return 'Enter a valid email address';
+    return 'Địa chỉ email không đúng định dạng';
   }
   return null;
 }

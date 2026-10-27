@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../repositories/auth_repository.dart';
 import '../repositories/auth_repository_provider.dart';
 import 'confirm_email_screen.dart';
 import 'login_screen.dart';
@@ -22,6 +23,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _gender = 'Không muốn nêu';
   bool _acceptedTerms = false;
   bool _loading = false;
+
   @override
   void dispose() {
     _name.dispose();
@@ -37,7 +39,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_formKey.currentState!.validate() || !_acceptedTerms) {
       if (!_acceptedTerms) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please accept the terms to continue.')),
+          const SnackBar(
+            content: Text('Vui lòng đồng ý với điều khoản sử dụng để tiếp tục.'),
+          ),
         );
       }
       return;
@@ -49,6 +53,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email: _email.text.trim(),
         password: _password.text,
         phone: _phone.text.trim(),
+        dateOfBirth: _dateOfBirth.text.trim(),
+        gender: _gender,
+        address: _address.text.trim(),
       );
       if (!mounted) return;
       if (outcome.needsConfirmation) {
@@ -58,15 +65,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         );
       } else {
-        Navigator.of(context).pop();
-      }
-    } catch (_) {
-      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
+            backgroundColor: Color(0xFF10B981),
             content: Text(
-              'Không thể đăng ký. Kiểm tra thông tin hoặc kết nối mạng.',
+              'Đăng ký tài khoản thành công! Bạn có thể đăng nhập ngay.',
             ),
+          ),
+        );
+        Navigator.of(context).pop(_email.text.trim());
+      }
+    } catch (e) {
+      if (mounted) {
+        final message = e is AuthRepositoryException
+            ? e.message
+            : 'Không thể đăng ký. Kiểm tra thông tin hoặc kết nối mạng.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red.shade700,
+            content: Text(message),
           ),
         );
       }
@@ -90,13 +107,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Create your account',
+                    'Đăng ký tài khoản Bệnh nhân',
                     style: Theme.of(context).textTheme.headlineMedium
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Your medical information stays private and secure.',
+                    'Thông tin sức khỏe của bạn được bảo mật tuyệt đối theo tiêu chuẩn y tế.',
                     style: TextStyle(color: AppColors.mutedText),
                   ),
                   const SizedBox(height: 30),
@@ -104,11 +121,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     controller: _name,
                     textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
-                      labelText: 'Full name',
+                      labelText: 'Họ và tên',
                       prefixIcon: Icon(Icons.person_outline),
                     ),
                     validator: (v) => v == null || v.trim().length < 2
-                        ? 'Enter your full name'
+                        ? 'Vui lòng nhập họ và tên'
                         : null,
                   ),
                   const SizedBox(height: 16),
@@ -116,7 +133,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
-                      labelText: 'Email address',
+                      labelText: 'Địa chỉ Email',
                       prefixIcon: Icon(Icons.mail_outline),
                     ),
                     validator: emailValidator,
@@ -126,26 +143,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     controller: _password,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: 'Create password',
+                      labelText: 'Tạo mật khẩu',
                       prefixIcon: Icon(Icons.lock_outline),
                     ),
-                    validator: (v) {
-                      if (authRepository.isDemo) {
-                        return v == null || v.length < 8
-                            ? 'Use at least 8 characters'
-                            : null;
-                      }
-                      if (v == null ||
-                          v.length < 12 ||
-                          !RegExp(r'[A-Z]').hasMatch(v) ||
-                          !RegExp(r'[a-z]').hasMatch(v) ||
-                          !RegExp(r'[0-9]').hasMatch(v)) {
-                        return 'Dùng ít nhất 12 ký tự, gồm chữ hoa, chữ thường và số';
-                      }
-                      return null;
-                    },
+                    validator: (v) => v == null || v.length < 6
+                        ? 'Mật khẩu phải có ít nhất 6 ký tự'
+                        : null,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _phone,
                     keyboardType: TextInputType.phone,
@@ -178,8 +183,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       prefixIcon: Icon(Icons.person_outline),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'Nữ', child: Text('Nữ')),
                       DropdownMenuItem(value: 'Nam', child: Text('Nam')),
+                      DropdownMenuItem(value: 'Nữ', child: Text('Nữ')),
                       DropdownMenuItem(value: 'Khác', child: Text('Khác')),
                       DropdownMenuItem(
                         value: 'Không muốn nêu',
@@ -195,12 +200,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     textCapitalization: TextCapitalization.words,
                     maxLines: 2,
                     decoration: const InputDecoration(
-                      labelText: 'Địa chỉ',
+                      labelText: 'Địa chỉ nơi ở',
                       prefixIcon: Icon(Icons.location_on_outlined),
                       alignLabelWithHint: true,
                     ),
                     validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Nhập địa chỉ'
+                        ? 'Nhập địa chỉ nơi ở'
                         : null,
                   ),
                   const SizedBox(height: 12),
@@ -211,7 +216,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     controlAffinity: ListTileControlAffinity.leading,
                     contentPadding: EdgeInsets.zero,
                     title: const Text(
-                      'I agree to the Terms of Use and Privacy Policy',
+                      'Tôi đồng ý với Điều khoản sử dụng và Chính sách bảo mật Y tế.',
                       style: TextStyle(fontSize: 13),
                     ),
                   ),
@@ -227,7 +232,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               strokeWidth: 2,
                             ),
                           )
-                        : const Text('Create account'),
+                        : const Text('Hoàn tất Đăng ký'),
                   ),
                 ],
               ),

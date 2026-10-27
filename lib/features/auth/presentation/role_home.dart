@@ -8,14 +8,11 @@ import '../../home/presentation/home_screen.dart';
 
 Widget homeForRole(UserRole role, {AppUser? user}) => switch (role) {
   UserRole.patient => const PatientHomeScreen(),
-  UserRole.doctor =>
-    AwsConfig.useAws
-        ? DoctorDashboardScreen(
-            doctorId: user?.doctorId ?? user?.id ?? '',
-            doctorName: user?.fullName ?? 'Bác sĩ',
-            department: '',
-          )
-        : const DoctorHomeScreen(),
+  UserRole.doctor => DoctorDashboardScreen(
+      doctorId: user?.doctorId ?? (AwsConfig.useAws ? (user?.id ?? '') : 'dr-linh'),
+      doctorName: user?.fullName ?? 'BS. Trần Thảo Linh',
+      department: user?.department ?? 'Khoa Tim mạch',
+    ),
   UserRole.admin => const AdminDashboardScreen(),
   UserRole.unknown => const AccessDeniedScreen(),
 };
@@ -49,9 +46,21 @@ class AccessDeniedScreen extends StatelessWidget {
     body: Center(
       child: Padding(
         padding: EdgeInsets.all(24),
-        child: Text(
-          'Không thể xác định quyền truy cập tài khoản.',
-          textAlign: TextAlign.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock_outline, size: 64, color: Colors.amber),
+            SizedBox(height: 16),
+            Text(
+              'Tài khoản chưa được phân quyền',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Liên hệ quản trị viên để được cấp quyền truy cập phù hợp.',
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     ),
@@ -65,23 +74,15 @@ class _PlaceholderHome extends StatelessWidget {
   @override
   Widget build(BuildContext c) => Scaffold(
     appBar: AppBar(title: Text(title)),
-    body: ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        const Text(
-          'Chức năng sẽ được mở khi backend xác thực quyền truy cập.',
-          style: TextStyle(color: Colors.black54),
-        ),
-        const SizedBox(height: 16),
-        ...items.map(
-          (e) => Card(
-            child: ListTile(
-              title: Text(e),
-              trailing: const Icon(Icons.lock_outline),
-            ),
-          ),
-        ),
-      ],
+    body: ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: items.length,
+      separatorBuilder: (_, _) => const Divider(),
+      itemBuilder: (_, i) => ListTile(
+        leading: CircleAvatar(child: Text('${i + 1}')),
+        title: Text(items[i]),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+      ),
     ),
   );
 }
