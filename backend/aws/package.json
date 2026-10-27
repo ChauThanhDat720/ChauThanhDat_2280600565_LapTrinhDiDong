@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": { "node": ">=24" },
-  "scripts": { "test": "node --test tests/*.test.js", "check": "node --check src/handler.js && node --check src/service.js" },
+  "scripts": { "test": "node --test tests/", "check": "node --check src/handler.js && node --check src/service.js" },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/lib-dynamodb": "^3.0.0",
