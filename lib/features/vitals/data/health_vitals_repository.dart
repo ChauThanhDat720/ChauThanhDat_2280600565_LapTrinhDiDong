@@ -12,7 +12,8 @@ abstract class HealthVitalsRepository {
 }
 
 class LocalHealthVitalsRepository implements HealthVitalsRepository {
-  LocalHealthVitalsRepository({List<HealthVital>? initialVitals}) {
+  LocalHealthVitalsRepository({List<HealthVital>? initialVitals})
+    : _hasCustomInitial = initialVitals != null {
     if (initialVitals != null) {
       _vitals.addAll(initialVitals);
     } else {
@@ -21,6 +22,7 @@ class LocalHealthVitalsRepository implements HealthVitalsRepository {
   }
 
   final List<HealthVital> _vitals = [];
+  final bool _hasCustomInitial;
 
   void _seedDefaultData() {
     final now = DateTime.now();
@@ -160,6 +162,11 @@ class LocalHealthVitalsRepository implements HealthVitalsRepository {
                 PatientSession.instance.matchesPatientId(v.patientId),
           )
           .toList();
+    }
+    if (_hasCustomInitial &&
+        PatientSession.instance.email.isEmpty &&
+        !PatientSession.instance.isViewingFamilyMember) {
+      return List.of(_vitals);
     }
     return _vitals
         .where((v) => PatientSession.instance.matchesPatientId(v.patientId))

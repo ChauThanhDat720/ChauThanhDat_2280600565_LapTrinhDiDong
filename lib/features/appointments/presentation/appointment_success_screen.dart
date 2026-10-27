@@ -96,8 +96,8 @@ class _AppointmentSuccessScreenState extends State<AppointmentSuccessScreen> {
                 const SizedBox(height: 8),
                 Text(
                   _isBookingPaid
-                      ? 'Bạn đã hoàn tất thanh toán Phí khám Đợt 1. Mã QR Check-in phòng khám đã sẵn sàng.'
-                      : 'Lịch khám của bạn đã được ghi nhận. Vui lòng thanh toán Phí đăng ký khám (Đợt 1) để nhận Mã QR Check-in.',
+                      ? 'Bạn đã hoàn tất thanh toán Phí đăng ký khám. Mã QR Check-in phòng khám đã sẵn sàng.'
+                      : 'Lịch khám của bạn đã được ghi nhận. Vui lòng thanh toán Phí đăng ký khám để nhận Mã QR Check-in.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 20),
@@ -132,8 +132,8 @@ class _AppointmentSuccessScreenState extends State<AppointmentSuccessScreen> {
                           Expanded(
                             child: Text(
                               _isBookingPaid
-                                  ? 'Đợt 1: Đã thanh toán Phí khám (150.000 đ)'
-                                  : 'Đợt 1: Chờ thanh toán Phí khám (150.000 đ)',
+                                  ? 'Đã thanh toán Phí đăng ký khám (150.000 đ)'
+                                  : 'Chờ thanh toán Phí đăng ký khám (150.000 đ)',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: _isBookingPaid

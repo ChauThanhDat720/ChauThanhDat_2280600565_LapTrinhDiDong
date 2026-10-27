@@ -124,7 +124,20 @@ class _HomeTabState extends State<_HomeTab> {
   @override
   void initState() {
     super.initState();
+    PatientSession.instance.addListener(_onProfileOrStoreChanged);
+    AppointmentStore.instance.addListener(_onProfileOrStoreChanged);
     _loadUpcomingAppointment();
+  }
+
+  @override
+  void dispose() {
+    PatientSession.instance.removeListener(_onProfileOrStoreChanged);
+    AppointmentStore.instance.removeListener(_onProfileOrStoreChanged);
+    super.dispose();
+  }
+
+  void _onProfileOrStoreChanged() {
+    if (mounted) _loadUpcomingAppointment();
   }
 
   Future<void> _loadUpcomingAppointment() async {
@@ -224,12 +237,14 @@ class _HomeTabState extends State<_HomeTab> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Xin chào,',
+                              PatientSession.instance.isViewingFamilyMember
+                                  ? 'Hồ sơ người thân đang chọn:'
+                                  : 'Xin chào,',
                               style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(color: AppColors.mutedText),
                             ),
                             Text(
-                              PatientSession.instance.name,
+                              PatientSession.instance.activePatientName,
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,

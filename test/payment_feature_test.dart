@@ -8,6 +8,10 @@ import 'package:smart_hospital/features/payments/presentation/vietqr_payment_scr
 import 'package:smart_hospital/features/payments/utils/vietqr_helper.dart';
 
 void main() {
+  setUp(() {
+    LocalPaymentRepository.resetForTest();
+  });
+
   group('VietQR Helper Tests', () {
     test('generateEmvcoString builds standard NAPAS 247 EMVCo payload', () {
       final emvco = VietQrHelper.generateEmvcoString(

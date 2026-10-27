@@ -81,7 +81,7 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
               color: Color(0xFFD97706),
               size: 48,
             ),
-            title: const Text('Chưa thanh toán Phí khám (Đợt 1)'),
+            title: const Text('Chưa thanh toán Phí đăng ký khám'),
             content: const Text(
               'Bệnh nhân cần hoàn tất thanh toán Phí đăng ký khám chuyên khoa (150.000 đ) trước khi được cấp Mã QR Check-in và lấy Số thứ tự (STT) vào phòng khám.',
             ),

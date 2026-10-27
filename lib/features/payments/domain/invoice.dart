@@ -40,15 +40,15 @@ enum PaymentStage {
   pharmacy;
 
   String get title => switch (this) {
-        booking => 'Đợt 1: Phí Đăng ký Khám chuyên khoa',
-        lab => 'Đợt 2: Phí Xét nghiệm & Cận lâm sàng',
-        pharmacy => 'Đợt 3: Tiền Thuốc (Nhà thuốc BV)',
+        booking => 'Phí Đăng ký Khám chuyên khoa',
+        lab => 'Phí Xét nghiệm & Cận lâm sàng',
+        pharmacy => 'Tiền Thuốc (Nhà thuốc BV)',
       };
 
   String get shortLabel => switch (this) {
-        booking => 'Đợt 1: Phí Khám',
-        lab => 'Đợt 2: Xét nghiệm CLS',
-        pharmacy => 'Đợt 3: Tiền Thuốc',
+        booking => 'Phí Khám',
+        lab => 'Xét nghiệm CLS',
+        pharmacy => 'Tiền Thuốc',
       };
 
   String get qrServiceTitle => switch (this) {

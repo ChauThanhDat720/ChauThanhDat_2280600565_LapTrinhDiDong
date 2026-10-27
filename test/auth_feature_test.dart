@@ -11,6 +11,8 @@ import 'package:smart_hospital/features/auth/presentation/role_home.dart';
 import 'package:smart_hospital/features/auth/repositories/auth_repository.dart';
 import 'package:smart_hospital/features/doctors/presentation/doctor_dashboard_screen.dart';
 import 'package:smart_hospital/features/family/data/family_repository.dart';
+import 'package:smart_hospital/features/family/domain/family_member.dart';
+import 'package:smart_hospital/features/family/presentation/family_profile_manager.dart';
 import 'package:smart_hospital/features/home/presentation/home_screen.dart';
 import 'package:smart_hospital/features/medical_records/presentation/lab_results_detail_screen.dart';
 import 'package:smart_hospital/features/payments/data/payment_repository.dart';
@@ -24,6 +26,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    LocalAppointmentRepository.resetForTest();
+    LocalPaymentRepository.resetForTest();
+    FamilyProfileManager.instance.reset();
     await PatientSession.instance.clear();
   });
 
@@ -539,7 +544,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(
-          find.text('Đợt 2: Chưa thanh toán Phí Xét nghiệm & CLS'),
+          find.text('Chưa thanh toán Phí Xét nghiệm & CLS'),
           findsOneWidget,
         );
 
@@ -580,6 +585,115 @@ void main() {
           await paymentRepo.isStagePaid(bookedApt.id, PaymentStage.pharmacy),
           isTrue,
         );
+      },
+    );
+
+    test(
+      'Each family member profile and account has isolated records, and completed exam shows Đã hoàn thành',
+      () async {
+        await PatientSession.instance.signIn(
+          email: 'hoang.patient@gmail.com',
+          name: 'Phạm Minh Hoàng',
+        );
+        FamilyProfileManager.instance.selectSelf();
+
+        final apptRepo = LocalAppointmentRepository();
+        final paymentRepo = LocalPaymentRepository();
+        final familyRepo = LocalFamilyRepository();
+
+        // 1. Self profile ("Bản thân") books an appointment
+        final selfApt = await apptRepo.createAppointment(
+          Appointment(
+            id: 'APT-SELF-01',
+            patientId: PatientSession.instance.patientId,
+            patientName: PatientSession.instance.activePatientName,
+            doctorId: 'dr-linh',
+            doctorName: 'BS. Trần Thảo Linh',
+            specialty: 'Tim mạch',
+            department: 'Khoa Tim mạch',
+            date: DateTime.now().add(const Duration(days: 1)),
+            time: '08:30',
+            reason: 'Khám tim mạch định kỳ',
+            status: AppointmentStatus.confirmed,
+            createdAt: DateTime.now(),
+          ),
+        );
+        expect(selfApt.patientId, 'patient-hoang.patient@gmail.com');
+        expect((await apptRepo.getMyAppointments()).length, 1);
+
+        // 2. Add a family member ("Mẹ") and switch active profile to "Mẹ"
+        final mother = await familyRepo.createMember(
+          FamilyMember(
+            id: 'fam-mother-01',
+            primaryPatientId: 'patient-hoang.patient@gmail.com',
+            fullName: 'Nguyễn Thị Hoa',
+            relationship: FamilyRelationship.mother,
+            dateOfBirth: DateTime(1965, 5, 10),
+            gender: 'Nữ',
+            bloodType: 'O+',
+          ),
+        );
+        FamilyProfileManager.instance.switchMember(mother);
+        expect(PatientSession.instance.isViewingFamilyMember, isTrue);
+        expect(
+          PatientSession.instance.patientId,
+          'patient-hoang.patient@gmail.com::fam-mother-01',
+        );
+        expect(PatientSession.instance.activePatientName, 'Nguyễn Thị Hoa');
+
+        // Mother profile has 0 appointments initially (does NOT see Self's appointment!)
+        expect(await apptRepo.getMyAppointments(), isEmpty);
+        expect(await paymentRepo.getInvoices(), isEmpty);
+
+        // 3. Book an appointment for Mother
+        final motherApt = await apptRepo.createAppointment(
+          Appointment(
+            id: 'APT-MOTHER-01',
+            patientId: PatientSession.instance.patientId,
+            patientName: PatientSession.instance.activePatientName,
+            doctorId: 'dr-linh',
+            doctorName: 'BS. Trần Thảo Linh',
+            specialty: 'Tim mạch',
+            department: 'Khoa Tim mạch',
+            date: DateTime.now().add(const Duration(days: 1)),
+            time: '09:30',
+            reason: 'Đo huyết áp cho mẹ',
+            status: AppointmentStatus.checkedIn,
+            createdAt: DateTime.now(),
+          ),
+        );
+        expect(
+          motherApt.patientId,
+          'patient-hoang.patient@gmail.com::fam-mother-01',
+        );
+        expect(motherApt.patientName, 'Nguyễn Thị Hoa');
+
+        final motherAppts = await apptRepo.getMyAppointments();
+        expect(motherAppts.length, 1);
+        expect(motherAppts.first.id, 'APT-MOTHER-01');
+
+        // 4. Switch back to Self ("Bản thân") -> only sees Self's appointment, NOT Mother's!
+        FamilyProfileManager.instance.selectSelf();
+        expect(PatientSession.instance.isViewingFamilyMember, isFalse);
+        final selfAppts = await apptRepo.getMyAppointments();
+        expect(selfAppts.length, 1);
+        expect(selfAppts.first.id, 'APT-SELF-01');
+
+        // 5. Doctor completes Mother's examination -> status becomes completed ("Đã hoàn thành")
+        final completedMotherApt = await apptRepo.updateAppointmentStatus(
+          motherApt.id,
+          AppointmentStatus.completed,
+          diagnosis: 'Huyết áp ổn định',
+          prescription: '1. Amlodipin 5mg - 1 viên sáng',
+        );
+        expect(completedMotherApt.status, AppointmentStatus.completed);
+        expect(completedMotherApt.status.title, 'Đã hoàn thành');
+
+        // Switch back to Mother -> sees completed status "Đã hoàn thành"
+        FamilyProfileManager.instance.switchMember(mother);
+        final updatedMotherAppts = await apptRepo.getMyAppointments();
+        expect(updatedMotherAppts.first.status, AppointmentStatus.completed);
+        expect(updatedMotherAppts.first.status.title, 'Đã hoàn thành');
       },
     );
   });

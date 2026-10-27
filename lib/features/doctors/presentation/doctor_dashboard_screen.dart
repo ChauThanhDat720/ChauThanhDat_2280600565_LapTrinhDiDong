@@ -54,7 +54,30 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    AppointmentStore.instance.addListener(_onStoreChanged);
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    AppointmentStore.instance.removeListener(_onStoreChanged);
+    super.dispose();
+  }
+
+  void _onStoreChanged() {
+    if (mounted && !_loading) {
+      setState(() {
+        final storeItems = AppointmentStore.instance.appointments;
+        for (int i = 0; i < _appointments.length; i++) {
+          final match = storeItems
+              .where((a) => a.id == _appointments[i].id)
+              .firstOrNull;
+          if (match != null) {
+            _appointments[i] = match;
+          }
+        }
+      });
+    }
   }
 
   Future<void> _loadData() async {
@@ -507,7 +530,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                   ),
                   const SizedBox(width: 10),
                   _statCard(
-                    title: 'Hoàn tất',
+                    title: 'Đã hoàn thành',
                     count: completedCount,
                     color: AppColors.success,
                     icon: Icons.check_circle_outline,
@@ -661,7 +684,13 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                                       if (idx >= 0) {
                                         _appointments[idx] = updated;
                                       }
+                                      if (_filterStatus != null &&
+                                          _filterStatus !=
+                                              AppointmentStatus.completed) {
+                                        _filterStatus = null;
+                                      }
                                     });
+                                    _loadData();
                                   }
                                 },
                               ),
@@ -722,7 +751,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                           const SizedBox(width: 8),
                           _filterChip(
                             AppointmentStatus.completed,
-                            'Đã khám ($completedCount)',
+                            'Đã hoàn thành ($completedCount)',
                           ),
                         ],
                       ),
@@ -1112,7 +1141,12 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                           (a) => a.id == updated.id,
                         );
                         if (idx >= 0) _appointments[idx] = updated;
+                        if (_filterStatus != null &&
+                            _filterStatus != AppointmentStatus.completed) {
+                          _filterStatus = null;
+                        }
                       });
+                      _loadData();
                     }
                   },
                   icon: const Icon(Icons.medical_services, size: 18),
@@ -1314,7 +1348,16 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Vui lòng nhập Chẩn đoán bệnh trước khi hoàn tất ca khám!',
+          ),
+        ),
+      );
+      return;
+    }
     setState(() => _submitting = true);
     try {
       String advice = _adviceController.text.trim();
@@ -1339,6 +1382,7 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
         note: advice,
         followUpDate: _selectedFollowUpDate,
       );
+      AppointmentStore.instance.replaceAppointment(updated);
 
       final paymentRepo = LocalPaymentRepository();
       if (_labOrdered && _selectedLabs.isNotEmpty) {
@@ -1613,7 +1657,7 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
                 label: Text(
                   _labOrdered
                       ? 'Đã chỉ định & Tạo phí CLS'
-                      : 'Chỉ định & Tạo phí CLS (Đợt 2)',
+                      : 'Chỉ định & Tạo phí CLS',
                 ),
                 onPressed: () async {
                   if (_selectedLabs.isEmpty) {
@@ -1633,7 +1677,7 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text(
-                          'Đã phát hành Chỉ định CLS & Hóa đơn Đợt 2. Bệnh nhân cần thanh toán phí CLS để nhận Mã QR xét nghiệm!',
+                          'Đã phát hành Chỉ định CLS & Hóa đơn xét nghiệm. Bệnh nhân cần thanh toán phí CLS để nhận Mã QR xét nghiệm!',
                         ),
                       ),
                     );
@@ -2276,12 +2320,47 @@ class DoctorExaminationDetailScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Bệnh nhân: ${appointment.patientName}',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Bệnh nhân: ${appointment.patientName}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.check_circle,
+                          size: 14,
+                          color: AppColors.success,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          appointment.status.title,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.success,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 6),
               Text(

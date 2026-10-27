@@ -14,11 +14,8 @@ abstract class FamilyRepository {
 
 class LocalFamilyRepository implements FamilyRepository {
   LocalFamilyRepository({List<FamilyMember>? initialMembers, String? ownerId})
-    : _ownerId =
-          ownerId ??
-          (PatientSession.instance.email.isEmpty
-              ? 'local-family'
-              : PatientSession.instance.email.toLowerCase()) {
+    : _customOwnerId = ownerId,
+      _hasCustomInitial = initialMembers != null {
     if (initialMembers != null) {
       _members.addAll(initialMembers);
     } else {
@@ -27,14 +24,27 @@ class LocalFamilyRepository implements FamilyRepository {
   }
 
   final List<FamilyMember> _members = [];
-  final String _ownerId;
+  final String? _customOwnerId;
+  final bool _hasCustomInitial;
+  String get _ownerId =>
+      _customOwnerId ??
+      (PatientSession.instance.email.isEmpty
+          ? 'local-family'
+          : PatientSession.instance.email.toLowerCase());
   String get _storageKey => 'family_members_v1:$_ownerId';
 
   Future<List<FamilyMember>> _readMembers() async {
     final saved = await LocalJsonStorage.read(_storageKey);
-    return saved == null
-        ? List.of(_members)
-        : saved.map(FamilyMember.fromJson).toList();
+    if (saved != null) {
+      return saved.map(FamilyMember.fromJson).toList();
+    }
+    if (_hasCustomInitial) {
+      return List.of(_members);
+    }
+    if (!PatientSession.instance.isDemoAccount) {
+      return <FamilyMember>[];
+    }
+    return List.of(_members);
   }
 
   Future<T> _change<T>(T Function(List<FamilyMember>) update) =>

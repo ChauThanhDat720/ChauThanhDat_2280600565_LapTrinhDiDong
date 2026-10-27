@@ -13,6 +13,10 @@ export const appointmentInput = (body) => {
     throw new HttpError(400, 'Thời điểm khám không hợp lệ.');
   }
   return {
+    patientName:
+      typeof body.patientName === 'string' && body.patientName.trim()
+        ? body.patientName.trim().slice(0, 120)
+        : undefined,
     doctorId: requiredText(body.doctorId, 'Bác sĩ'),
     doctorName: requiredText(body.doctorName, 'Tên bác sĩ'),
     specialty: requiredText(body.specialty, 'Chuyên khoa'),

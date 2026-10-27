@@ -30,8 +30,18 @@ class PatientSession extends ChangeNotifier {
   String _role = 'patient';
   String _doctorId = '';
   String _department = '';
+  String _activeMemberId = '';
+  String _activeMemberName = '';
+  bool _activeMemberIsSelf = true;
 
   String get name => _name.isEmpty ? 'Patient' : _name;
+  String get activePatientName =>
+      (!_activeMemberIsSelf && _activeMemberName.isNotEmpty)
+          ? _activeMemberName
+          : name;
+  String get activeMemberId => _activeMemberId;
+  bool get isViewingFamilyMember =>
+      !_activeMemberIsSelf && _activeMemberId.isNotEmpty;
   String get email => _email;
   String get phone => _phone;
   String get dateOfBirth => _dateOfBirth;
@@ -54,30 +64,77 @@ class PatientSession extends ChangeNotifier {
         clean == 'demo-patient';
   }
 
-  /// Unique patient identifier scoped to the currently logged-in account.
-  String get patientId {
+  /// Base account-level patient identifier.
+  String get basePatientId {
     if (isDemoAccount) return 'demo-patient';
     return 'patient-${_email.trim().toLowerCase()}';
   }
 
-  /// Checks whether a record's [recordPatientId] belongs to the active session.
+  /// Unique patient identifier scoped to the currently active profile
+  /// (either the logged-in account's Self profile or a selected Family Member).
+  String get patientId {
+    if (!isViewingFamilyMember) return basePatientId;
+    return '$basePatientId::$_activeMemberId';
+  }
+
+  void setActiveFamilyProfile({
+    required String memberId,
+    required String memberName,
+    required bool isSelf,
+  }) {
+    final cleanId = memberId.trim();
+    final cleanName = memberName.trim();
+    if (_activeMemberId == cleanId &&
+        _activeMemberName == cleanName &&
+        _activeMemberIsSelf == isSelf) {
+      return;
+    }
+    _activeMemberId = cleanId;
+    _activeMemberName = cleanName;
+    _activeMemberIsSelf = isSelf;
+    notifyListeners();
+  }
+
+  void resetActiveFamilyProfile({bool notify = true}) {
+    _activeMemberId = '';
+    _activeMemberName = '';
+    _activeMemberIsSelf = true;
+    if (notify) notifyListeners();
+  }
+
+  /// Checks whether a record's [recordPatientId] belongs to the active profile.
   bool matchesPatientId(String? recordPatientId) {
+    if (isViewingFamilyMember) {
+      if (recordPatientId == null || recordPatientId.isEmpty) return false;
+      final target = recordPatientId.trim().toLowerCase();
+      final memberLower = _activeMemberId.toLowerCase();
+      return target == patientId.toLowerCase() || target == memberLower;
+    }
+
     if (recordPatientId == null || recordPatientId.isEmpty) {
       return isDemoAccount;
     }
     final target = recordPatientId.trim().toLowerCase();
+    // Do not leak family member records into the Self profile
+    if (target.contains('::')) return false;
+    if (target.startsWith('fam-') && !target.startsWith('fam-self')) {
+      return false;
+    }
+
     if (isDemoAccount) {
       return target == 'demo-patient' ||
           target == 'bn-01' ||
           target == 'patient-1' ||
           target == 'test-patient-sub-123' ||
+          target == 'fam-self-01' ||
           target == 'patient.an@hospital.com' ||
           target == 'local-patient.an@hospital.com';
     }
     final cleanEmail = _email.trim().toLowerCase();
-    return target == patientId.toLowerCase() ||
+    return target == basePatientId.toLowerCase() ||
         target == cleanEmail ||
-        target == 'local-$cleanEmail';
+        target == 'local-$cleanEmail' ||
+        target == 'self-$cleanEmail';
   }
 
   Future<void> restore() async {
@@ -148,6 +205,7 @@ class PatientSession extends ChangeNotifier {
     _role = role;
     _doctorId = doctorId;
     _department = department;
+    resetActiveFamilyProfile(notify: false);
     final preferences = await SharedPreferences.getInstance();
     await Future.wait([
       preferences.setString(_nameKey, _name),
@@ -175,6 +233,7 @@ class PatientSession extends ChangeNotifier {
     _role = 'patient';
     _doctorId = '';
     _department = '';
+    resetActiveFamilyProfile(notify: false);
     final preferences = await SharedPreferences.getInstance();
     await Future.wait([
       preferences.remove(_nameKey),

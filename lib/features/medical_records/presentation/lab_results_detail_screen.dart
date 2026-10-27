@@ -259,7 +259,7 @@ class _LabResultsDetailScreenState extends State<LabResultsDetailScreen>
               ),
               const SizedBox(height: 16),
               const Text(
-                'Đợt 2: Chưa thanh toán Phí Xét nghiệm & CLS',
+                'Chưa thanh toán Phí Xét nghiệm & CLS',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 17,
@@ -269,7 +269,7 @@ class _LabResultsDetailScreenState extends State<LabResultsDetailScreen>
               ),
               const SizedBox(height: 8),
               const Text(
-                'Theo quy trình bệnh viện, bệnh nhân cần hoàn tất thanh toán phí chỉ định Cận lâm sàng (Đợt 2) trước khi được cấp Mã QR Phòng Xét nghiệm (CLS-QR) và xem kết quả.',
+                'Theo quy trình bệnh viện, bệnh nhân cần hoàn tất thanh toán phí chỉ định Cận lâm sàng trước khi được cấp Mã QR Phòng Xét nghiệm (CLS-QR) và xem kết quả.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13.5,
@@ -345,7 +345,7 @@ class _LabResultsDetailScreenState extends State<LabResultsDetailScreen>
                   ),
                   icon: const Icon(Icons.qr_code_scanner_rounded),
                   label: const Text(
-                    'Thanh toán Phí Xét nghiệm (Đợt 2 - VietQR)',
+                    'Thanh toán Phí Xét nghiệm (VietQR)',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   onPressed: () async {
@@ -394,7 +394,7 @@ class _LabResultsDetailScreenState extends State<LabResultsDetailScreen>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Đã thanh toán Phí CLS (Đợt 2) • Mã QR Phòng Xét nghiệm: CLS-QR:$_targetId',
+                    'Đã thanh toán Phí CLS • Mã QR Phòng Xét nghiệm: CLS-QR:$_targetId',
                     style: const TextStyle(
                       color: Color(0xFF065F46),
                       fontSize: 12,

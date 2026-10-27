@@ -114,18 +114,32 @@ export const handler = async (event) =>
       }
     }
 
-    // 5. GET /appointments (Patient lists own appointments)
+    // 5. GET /appointments (Patient lists own or active family member's appointments)
     if (method === 'GET' && !appointmentId) {
       requirePatientRole(event);
-      const patientId = patientIdFromEvent(event);
+      const basePatientId = patientIdFromEvent(event);
+      const requestedId = event.queryStringParameters?.patientId;
+      const patientId =
+        requestedId &&
+        basePatientId &&
+        (requestedId === basePatientId || requestedId.startsWith(`${basePatientId}::`))
+          ? requestedId
+          : basePatientId;
       return json(200, { items: await repository.listByPatient(patientId) });
     }
 
-    // 6. POST /appointments (Patient creates appointment)
+    // 6. POST /appointments (Patient creates appointment for self or family member)
     if (method === 'POST' && !appointmentId) {
       requirePatientRole(event);
-      const patientId = patientIdFromEvent(event);
+      const basePatientId = patientIdFromEvent(event);
       const body = parseJsonBody(event);
+      const requestedId = body?.patientId;
+      const patientId =
+        requestedId &&
+        basePatientId &&
+        (requestedId === basePatientId || requestedId.startsWith(`${basePatientId}::`))
+          ? requestedId
+          : basePatientId;
       const idempotencyKey =
         event.headers?.['idempotency-key'] ||
         event.headers?.['Idempotency-Key'] ||

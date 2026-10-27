@@ -22,6 +22,8 @@ enum AppointmentStatus {
     cancelled => 'Đã hủy',
   };
 
+  String get title => label;
+
   static AppointmentStatus fromJson(Object? value) =>
       switch (value.toString().toUpperCase()) {
         'CONFIRMED' => confirmed,
@@ -130,6 +132,7 @@ class Appointment {
     DateTime? updatedAt,
     DateTime? cancelledAt,
     String? cancellationReason,
+    String? patientId,
     String? patientName,
     String? diagnosis,
     String? prescription,
@@ -153,7 +156,7 @@ class Appointment {
     date: date,
     time: time,
     reason: reason,
-    patientId: patientId,
+    patientId: patientId ?? this.patientId,
     patientName: patientName ?? this.patientName,
     departmentId: departmentId,
     status: status ?? this.status,
@@ -216,6 +219,7 @@ class Appointment {
 
   Map<String, dynamic> toJson() => {
     'appointmentId': id,
+    'patientId': patientId,
     'doctorId': doctorId,
     'departmentId': departmentId,
     'patientName': patientName,

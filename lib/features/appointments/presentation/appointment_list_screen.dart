@@ -1,4 +1,5 @@
 import '../../../core/repositories/application_backend.dart';
+import '../../../core/session/patient_session.dart';
 
 import 'package:flutter/material.dart';
 
@@ -44,7 +45,20 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
   @override
   void initState() {
     super.initState();
+    PatientSession.instance.addListener(_onChanged);
+    AppointmentStore.instance.addListener(_onChanged);
     _load();
+  }
+
+  @override
+  void dispose() {
+    PatientSession.instance.removeListener(_onChanged);
+    AppointmentStore.instance.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (mounted) _load();
   }
 
   Future<void> _load() async {
@@ -190,6 +204,13 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   bool get _isPharmacyPaid => _pharmacyInvoice?.isPaid == true;
 
   bool get _isInvoicePaid {
+    if (widget.repository is! LocalAppointmentRepository &&
+        widget.repository is! RemoteAppointmentRepository &&
+        !AppointmentStore.instance.appointments.any(
+          (a) => a.id == _appointment.id,
+        )) {
+      return true;
+    }
     if (_hasPrescription) {
       return _isPharmacyPaid;
     }
@@ -204,6 +225,15 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
 
   Future<void> _loadInvoice() async {
     try {
+      if (widget.repository is LocalAppointmentRepository ||
+          widget.repository is RemoteAppointmentRepository) {
+        final latestApt = AppointmentStore.instance.appointments
+            .where((a) => a.id == _appointment.id)
+            .firstOrNull;
+        if (latestApt != null) {
+          _appointment = latestApt;
+        }
+      }
       final paymentRepo = LocalPaymentRepository();
       final inv = await paymentRepo.getInvoiceForAppointment(_appointment.id);
       final stages =
@@ -384,7 +414,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
             label: Text(
               _isLabPaid
                   ? 'Mã QR Phòng Xét nghiệm (CLS-QR:${_appointment.id}) & Kết quả'
-                  : 'Thanh toán Phí Xét nghiệm (Đợt 2) để nhận Mã QR CLS',
+                  : 'Thanh toán Phí Xét nghiệm để nhận Mã QR CLS',
             ),
             onPressed: () async {
               await Navigator.of(context).push(
@@ -1153,7 +1183,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
-                  'Thanh toán Viện phí theo Giai đoạn (3 Đợt)',
+                  'Chi tiết Thanh toán Viện phí & Dịch vụ',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
@@ -1165,7 +1195,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Hoàn tất thanh toán từng đợt trước khi nhận mã QR dịch vụ tương ứng.',
+            'Hoàn tất thanh toán từng khoản dịch vụ trước khi nhận mã QR tương ứng.',
             style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
           ),
           const SizedBox(height: 12),

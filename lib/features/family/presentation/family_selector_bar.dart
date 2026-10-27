@@ -1,4 +1,5 @@
 import '../../../core/repositories/application_backend.dart';
+import '../../../core/session/patient_session.dart';
 
 import 'package:flutter/material.dart';
 
@@ -51,10 +52,18 @@ class _FamilySelectorBarState extends State<FamilySelectorBar> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: FamilyProfileManager.instance,
+      animation: Listenable.merge([
+        FamilyProfileManager.instance,
+        PatientSession.instance,
+      ]),
       builder: (context, _) {
         final members = FamilyProfileManager.instance.members;
         final active = FamilyProfileManager.instance.activeMember;
+        final hasSelfInMembers = members.any((m) => m.isSelf);
+        final isSelfSelected = active == null || active.isSelf;
+        final activeLabel = (active != null && !active.isSelf)
+            ? '${active.fullName} (${active.relationshipLabel})'
+            : '${PatientSession.instance.name} (Bản thân)';
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -87,7 +96,7 @@ class _FamilySelectorBarState extends State<FamilySelectorBar> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Đang xem hồ sơ: ${active?.fullName ?? "Bản thân"}',
+                            'Đang xem hồ sơ: $activeLabel',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -102,13 +111,14 @@ class _FamilySelectorBarState extends State<FamilySelectorBar> {
                   ),
                   const SizedBox(width: 8),
                   InkWell(
-                    onTap: () {
-                      Navigator.of(context).push(
+                    onTap: () async {
+                      await Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) =>
                               FamilyMembersScreen(repository: _repository),
                         ),
                       );
+                      FamilyProfileManager.instance.loadMembers(_repository);
                     },
                     child: const Text(
                       'Quản lý gia đình',
@@ -126,6 +136,72 @@ class _FamilySelectorBarState extends State<FamilySelectorBar> {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
+                    if (!hasSelfInMembers)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: InkWell(
+                          onTap: _selecting
+                              ? null
+                              : () => FamilyProfileManager.instance.selectSelf(),
+                          borderRadius: BorderRadius.circular(24),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelfSelected
+                                  ? AppColors.primary
+                                  : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: isSelfSelected
+                                    ? AppColors.primary
+                                    : const Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: isSelfSelected
+                                      ? Colors.white.withValues(alpha: 0.25)
+                                      : AppColors.primary.withValues(alpha: 0.15),
+                                  child: Icon(
+                                    Icons.person_rounded,
+                                    size: 14,
+                                    color: isSelfSelected
+                                        ? Colors.white
+                                        : AppColors.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Bản thân',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: isSelfSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.w500,
+                                    color: isSelfSelected
+                                        ? Colors.white
+                                        : const Color(0xFF334155),
+                                  ),
+                                ),
+                                if (isSelfSelected) ...[
+                                  const SizedBox(width: 4),
+                                  const Icon(
+                                    Icons.check_rounded,
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                     ...members.map((member) {
                       final isSelected = active?.id == member.id;
                       return Padding(
@@ -198,13 +274,14 @@ class _FamilySelectorBarState extends State<FamilySelectorBar> {
                     }),
                     // Button Thêm thành viên nhanh
                     InkWell(
-                      onTap: () {
-                        Navigator.of(context).push(
+                      onTap: () async {
+                        await Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) =>
                                 FamilyMembersScreen(repository: _repository),
                           ),
                         );
+                        FamilyProfileManager.instance.loadMembers(_repository);
                       },
                       borderRadius: BorderRadius.circular(24),
                       child: Container(

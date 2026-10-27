@@ -178,7 +178,7 @@ void main() {
     // Verify Stats
     expect(find.text('Chờ duyệt'), findsOneWidget);
     expect(find.text('Đã duyệt'), findsOneWidget);
-    expect(find.text('Hoàn tất'), findsOneWidget);
+    expect(find.text('Đã hoàn thành'), findsWidgets);
 
     // Verify Appointments
     expect(find.text('Nguyễn Văn A'), findsOneWidget);

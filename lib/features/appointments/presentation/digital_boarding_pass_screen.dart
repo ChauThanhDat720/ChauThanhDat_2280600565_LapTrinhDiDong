@@ -491,7 +491,7 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                                     ),
                                     SizedBox(height: 6),
                                     Text(
-                                      'Vui lòng hoàn tất thanh toán Đợt 1: Phí đăng ký khám chuyên khoa (150.000 đ) để nhận Mã QR Check-in và lấy Số thứ tự (STT) vào phòng khám.',
+                                      'Vui lòng hoàn tất thanh toán Phí đăng ký khám chuyên khoa (150.000 đ) để nhận Mã QR Check-in và lấy Số thứ tự (STT) vào phòng khám.',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontSize: 12.5,
@@ -522,7 +522,7 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                       ),
                       icon: const Icon(Icons.qr_code_2_rounded),
                       label: const Text(
-                        'Thanh toán Phí khám Đợt 1 (150.000 đ) để nhận QR',
+                        'Thanh toán Phí đăng ký khám (150.000 đ) để nhận QR',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
