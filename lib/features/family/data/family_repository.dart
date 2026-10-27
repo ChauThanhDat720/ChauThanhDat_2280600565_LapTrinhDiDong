@@ -52,6 +52,7 @@ class LocalFamilyRepository implements FamilyRepository {
       });
 
   void _seedDefaultMembers() {
+    if (!PatientSession.instance.isDemoAccount) return;
     final now = DateTime.now();
     _members.addAll([
       FamilyMember(

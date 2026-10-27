@@ -1,4 +1,3 @@
-import '../../../core/config/aws_config.dart';
 import '../../../core/repositories/application_backend.dart';
 
 import 'package:flutter/material.dart';
@@ -27,7 +26,9 @@ import '../../appointments/presentation/digital_boarding_pass_screen.dart';
 import '../../appointments/presentation/reception_checkin_screen.dart';
 import '../../reminders/presentation/medication_reminder_screen.dart';
 import '../../vitals/presentation/health_vitals_screen.dart';
+import '../../payments/data/payment_repository.dart';
 import '../../payments/presentation/invoice_management_screen.dart';
+import '../../payments/presentation/vietqr_payment_screen.dart';
 import '../../family/presentation/family_selector_bar.dart';
 import '../../family/presentation/family_members_screen.dart';
 import '../../teleconsultation/presentation/post_care_chat_screen.dart';
@@ -433,9 +434,8 @@ class _HomeTabState extends State<_HomeTab> {
                       _Action(
                         icon: Icons.forum_rounded,
                         title: 'Tư vấn hậu khám',
-                        onTap: () {
-                          if (AwsConfig.useAws &&
-                              _latestCompletedAppointment == null) {
+                        onTap: () async {
+                          if (_latestCompletedAppointment == null) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
@@ -445,12 +445,82 @@ class _HomeTabState extends State<_HomeTab> {
                             );
                             return;
                           }
-                          final targetId =
-                              _latestCompletedAppointment?.id ?? 'APT-001';
+                          final targetId = _latestCompletedAppointment!.id;
+                          final paymentRepo = LocalPaymentRepository();
+                          final invoice = await paymentRepo
+                              .getInvoiceForAppointment(targetId);
+                          if (!context.mounted) return;
+                          if (!invoice.isPaid) {
+                            final goPay = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Row(
+                                  children: [
+                                    Icon(
+                                      Icons.lock_outline_rounded,
+                                      color: Color(0xFFD97706),
+                                    ),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Chưa thanh toán viện phí',
+                                        style: TextStyle(fontSize: 17),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                content: const Text(
+                                  'Kênh tư vấn y tế hậu khám với Bác sĩ chỉ được mở khóa sau khi bạn hoàn tất thanh toán viện phí và đơn thuốc của lượt khám này.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, false),
+                                    child: const Text('Để sau'),
+                                  ),
+                                  FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: const Color(0xFFD97706),
+                                    ),
+                                    icon: const Icon(
+                                      Icons.qr_code_rounded,
+                                      size: 18,
+                                    ),
+                                    label: const Text('Thanh toán ngay'),
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (goPay == true && context.mounted) {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => VietQrPaymentScreen(
+                                    invoice: invoice,
+                                    repository: paymentRepo,
+                                  ),
+                                ),
+                              );
+                              final refreshed = await paymentRepo
+                                  .getInvoiceForAppointment(targetId);
+                              if (refreshed.isPaid && context.mounted) {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => PostCareChatScreen(
+                                      appointmentId: targetId,
+                                      requirePayment: true,
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                            return;
+                          }
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  PostCareChatScreen(appointmentId: targetId),
+                              builder: (_) => PostCareChatScreen(
+                                appointmentId: targetId,
+                                requirePayment: true,
+                              ),
                             ),
                           );
                         },

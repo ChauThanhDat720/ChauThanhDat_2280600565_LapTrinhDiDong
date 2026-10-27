@@ -10,6 +10,9 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../doctors/domain/doctor.dart';
 import '../../doctors/presentation/doctor_screens.dart';
+import '../../payments/data/payment_repository.dart';
+import '../../payments/domain/invoice.dart';
+import '../../payments/presentation/vietqr_payment_screen.dart';
 import '../data/teleconsultation_repository.dart';
 import '../domain/teleconsultation.dart';
 
@@ -19,6 +22,7 @@ class PostCareChatScreen extends StatefulWidget {
     required this.appointmentId,
     this.sessionId,
     this.isDoctorView = false,
+    this.requirePayment = false,
     this.currentUserId,
     this.currentUserName,
     TeleconsultationRepository? repository,
@@ -27,6 +31,7 @@ class PostCareChatScreen extends StatefulWidget {
   final String appointmentId;
   final String? sessionId;
   final bool isDoctorView;
+  final bool requirePayment;
   final String? currentUserId;
   final String? currentUserName;
   final TeleconsultationRepository? _providedRepository;
@@ -47,6 +52,7 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
   Timer? _pollTimer;
   bool _polling = false;
   TeleconsultationSession? _session;
+  Invoice? _unpaidInvoice;
   bool _showPrescriptionSummary = true;
   String? _selectedAttachmentUrl;
   String? _selectedAttachmentName;
@@ -123,6 +129,22 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
       _loadError = null;
     });
     try {
+      if (widget.requirePayment && !widget.isDoctorView) {
+        final paymentRepo = LocalPaymentRepository();
+        final invoice = await paymentRepo.getInvoiceForAppointment(
+          widget.appointmentId,
+        );
+        if (!invoice.isPaid) {
+          if (mounted) {
+            setState(() {
+              _unpaidInvoice = invoice;
+              _loading = false;
+            });
+          }
+          return;
+        }
+      }
+      _unpaidInvoice = null;
       final session = await widget.repository.getOrCreateSession(
         widget.appointmentId,
       );
@@ -386,6 +408,67 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
       return Scaffold(
         appBar: AppBar(title: const Text('Tư vấn y tế hậu khám')),
         body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_unpaidInvoice != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Tư vấn y tế hậu khám')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFEF3C7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.lock_clock_rounded,
+                    size: 48,
+                    color: Color(0xFFD97706),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Chưa hoàn tất thanh toán viện phí',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Kênh tư vấn trực tiếp 7 ngày với Bác sĩ chỉ được kích hoạt sau khi bạn hoàn tất thanh toán viện phí và đơn thuốc.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xFF475569), height: 1.4),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFD97706),
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: const Icon(Icons.qr_code_rounded),
+                  label: const Text('Thanh toán viện phí ngay (VietQR)'),
+                  onPressed: () async {
+                    final paymentRepo = LocalPaymentRepository();
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => VietQrPaymentScreen(
+                          invoice: _unpaidInvoice!,
+                          repository: paymentRepo,
+                        ),
+                      ),
+                    );
+                    await _loadSession();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 

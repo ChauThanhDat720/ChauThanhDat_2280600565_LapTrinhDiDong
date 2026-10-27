@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/session/patient_session.dart';
 import '../../../core/utils/app_timezone.dart';
 import '../domain/vaccination_record.dart';
 
@@ -117,27 +118,60 @@ class VaccinationStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  List<VaccinationRecord> get _patientRecords {
+    seedIfEmpty();
+    return _records
+        .where((r) => PatientSession.instance.matchesPatientId(r.patientId))
+        .toList();
+  }
+
   void save(VaccinationRecord record) {
-    final idx = _records.indexWhere((r) => r.id == record.id);
+    final resolvedPatientId =
+        (record.patientId.isEmpty ||
+            (record.patientId == 'BN-01' &&
+                !PatientSession.instance.isDemoAccount))
+        ? PatientSession.instance.patientId
+        : record.patientId;
+    final resolvedRecord = VaccinationRecord(
+      id: record.id,
+      patientId: resolvedPatientId,
+      familyMemberId: record.familyMemberId,
+      patientName: record.patientName,
+      vaccineName: record.vaccineName,
+      targetDisease: record.targetDisease,
+      doseNumber: record.doseNumber,
+      totalDoses: record.totalDoses,
+      batchNumber: record.batchNumber,
+      manufacturer: record.manufacturer,
+      administeredDate: record.administeredDate,
+      nextDoseDate: record.nextDoseDate,
+      facilityName: record.facilityName,
+      doctorName: record.doctorName,
+      nurseName: record.nurseName,
+      reactionStatus: record.reactionStatus,
+      certificateCode: record.certificateCode,
+      status: record.status,
+    );
+    final idx = _records.indexWhere((r) => r.id == resolvedRecord.id);
     if (idx >= 0) {
-      _records[idx] = record;
+      _records[idx] = resolvedRecord;
     } else {
-      _records.insert(0, record);
+      _records.insert(0, resolvedRecord);
     }
     notifyListeners();
   }
 
   List<VaccinationRecord> getByFamilyMember(String? familyMemberId) {
-    seedIfEmpty();
+    final visible = _patientRecords;
     if (familyMemberId == null || familyMemberId.isEmpty || familyMemberId == 'all') {
-      return List.unmodifiable(_records);
+      return List.unmodifiable(visible);
     }
-    return _records.where((r) => r.familyMemberId == familyMemberId).toList();
+    return visible.where((r) => r.familyMemberId == familyMemberId).toList();
   }
 
   List<VaccinationRecord> getUpcoming() {
-    seedIfEmpty();
-    return _records.where((r) => r.nextDoseDate != null).toList()
+    final visible = _patientRecords;
+    return visible.where((r) => r.nextDoseDate != null).toList()
       ..sort((a, b) => a.nextDoseDate!.compareTo(b.nextDoseDate!));
   }
 }

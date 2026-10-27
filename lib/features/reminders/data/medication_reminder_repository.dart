@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../../../core/network/api_client.dart';
+import '../../../core/session/patient_session.dart';
 import '../domain/medication_reminder.dart';
 
 abstract class MedicationReminderRepository {
@@ -111,12 +112,21 @@ class LocalMedicationReminderRepository implements MedicationReminderRepository 
     }
   }
 
+  bool _matchesPatient(String reminderPatientId, String? requestedPatientId) {
+    if (requestedPatientId != null &&
+        requestedPatientId.isNotEmpty &&
+        requestedPatientId != 'patient-1') {
+      return reminderPatientId == requestedPatientId ||
+          PatientSession.instance.matchesPatientId(reminderPatientId);
+    }
+    return PatientSession.instance.matchesPatientId(reminderPatientId);
+  }
+
   @override
   Future<List<MedicationReminder>> getReminders({String? patientId, bool? isActive}) async {
-    var result = List<MedicationReminder>.from(_reminders);
-    if (patientId != null && patientId.isNotEmpty) {
-      result = result.where((r) => r.patientId == patientId).toList();
-    }
+    var result = _reminders
+        .where((r) => _matchesPatient(r.patientId, patientId))
+        .toList();
     if (isActive != null) {
       result = result.where((r) => r.isActive == isActive).toList();
     }
@@ -126,7 +136,10 @@ class LocalMedicationReminderRepository implements MedicationReminderRepository 
   @override
   Future<List<MedicationDoseLog>> getTodayDoses({String? patientId, String? date}) async {
     final targetDate = date ?? DateTime.now().toIso8601String().substring(0, 10);
-    final activeIds = _reminders.where((r) => r.isActive).map((r) => r.id).toSet();
+    final activeIds = _reminders
+        .where((r) => r.isActive && _matchesPatient(r.patientId, patientId))
+        .map((r) => r.id)
+        .toSet();
 
     final result = _logs
         .where((l) => l.date == targetDate && activeIds.contains(l.reminderId))
@@ -141,7 +154,19 @@ class LocalMedicationReminderRepository implements MedicationReminderRepository 
     final todayStr = now.toIso8601String().substring(0, 10);
     final startStr = now.subtract(Duration(days: days)).toIso8601String().substring(0, 10);
 
-    final relevant = _logs.where((l) => l.date.compareTo(startStr) >= 0 && l.date.compareTo(todayStr) <= 0).toList();
+    final patientReminderIds = _reminders
+        .where((r) => _matchesPatient(r.patientId, patientId))
+        .map((r) => r.id)
+        .toSet();
+
+    final relevant = _logs
+        .where(
+          (l) =>
+              patientReminderIds.contains(l.reminderId) &&
+              l.date.compareTo(startStr) >= 0 &&
+              l.date.compareTo(todayStr) <= 0,
+        )
+        .toList();
     final taken = relevant.where((l) => l.status == DoseStatus.taken).length;
     final skipped = relevant.where((l) => l.status == DoseStatus.skipped).length;
     final pending = relevant.where((l) => l.status == DoseStatus.pending).length;
@@ -163,7 +188,13 @@ class LocalMedicationReminderRepository implements MedicationReminderRepository 
     final id = reminder.id.isEmpty
         ? 'REM-${DateTime.now().millisecondsSinceEpoch}'
         : reminder.id;
-    final updated = reminder.copyWith(id: id);
+    final resolvedPatientId =
+        (reminder.patientId.isEmpty ||
+            (reminder.patientId == 'patient-1' &&
+                !PatientSession.instance.isDemoAccount))
+        ? PatientSession.instance.patientId
+        : reminder.patientId;
+    final updated = reminder.copyWith(id: id, patientId: resolvedPatientId);
     _reminders.add(updated);
     _generateLogsForReminder(updated);
     return updated;
@@ -229,9 +260,17 @@ class LocalMedicationReminderRepository implements MedicationReminderRepository 
         instructions = 'Uống trước bữa ăn 30 phút';
       }
 
+      final resolvedPatientId =
+          (patientId == null ||
+              patientId.isEmpty ||
+              (patientId == 'patient-1' &&
+                  !PatientSession.instance.isDemoAccount))
+          ? PatientSession.instance.patientId
+          : patientId;
+
       final rem = MedicationReminder(
         id: 'REM-${DateTime.now().millisecondsSinceEpoch}-$colorIdx',
-        patientId: patientId ?? 'patient-1',
+        patientId: resolvedPatientId,
         appointmentId: appointmentId,
         medicineName: name,
         dosage: dosage,

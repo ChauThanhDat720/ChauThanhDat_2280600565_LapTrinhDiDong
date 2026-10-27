@@ -44,6 +44,42 @@ class PatientSession extends ChangeNotifier {
   String get department => _department;
   bool get isLoggedIn => _email.isNotEmpty;
 
+  /// True when no custom account is signed in, or when signed in with the
+  /// default demo patient account. Newly registered accounts return false.
+  bool get isDemoAccount {
+    final clean = _email.trim().toLowerCase();
+    return clean.isEmpty ||
+        clean == 'patient.an@hospital.com' ||
+        clean == 'test.user@hospital.com' ||
+        clean == 'demo-patient';
+  }
+
+  /// Unique patient identifier scoped to the currently logged-in account.
+  String get patientId {
+    if (isDemoAccount) return 'demo-patient';
+    return 'patient-${_email.trim().toLowerCase()}';
+  }
+
+  /// Checks whether a record's [recordPatientId] belongs to the active session.
+  bool matchesPatientId(String? recordPatientId) {
+    if (recordPatientId == null || recordPatientId.isEmpty) {
+      return isDemoAccount;
+    }
+    final target = recordPatientId.trim().toLowerCase();
+    if (isDemoAccount) {
+      return target == 'demo-patient' ||
+          target == 'bn-01' ||
+          target == 'patient-1' ||
+          target == 'test-patient-sub-123' ||
+          target == 'patient.an@hospital.com' ||
+          target == 'local-patient.an@hospital.com';
+    }
+    final cleanEmail = _email.trim().toLowerCase();
+    return target == patientId.toLowerCase() ||
+        target == cleanEmail ||
+        target == 'local-$cleanEmail';
+  }
+
   Future<void> restore() async {
     final preferences = await SharedPreferences.getInstance();
     _name = preferences.getString(_nameKey) ?? '';

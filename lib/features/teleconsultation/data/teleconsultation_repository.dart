@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/session/patient_session.dart';
 import '../../../core/storage/local_json_storage.dart';
 import '../domain/post_care_assistant.dart';
 import '../../../core/utils/app_timezone.dart';
@@ -259,12 +260,16 @@ class LocalTeleconsultationRepository implements TeleconsultationRepository {
       final sessionId = 'tc-$appointmentId';
 
       final doctorName = appt?.doctorName ?? 'BS. Trần Thảo Linh';
-      final patientName = appt?.patientName ?? 'Bệnh nhân';
+      final patientName =
+          appt?.patientName ??
+          (PatientSession.instance.email.isNotEmpty
+              ? PatientSession.instance.name
+              : 'Bệnh nhân');
       final diagnosis = appt?.diagnosis ?? 'Theo dõi sau khám';
       final prescription = appt?.prescription ?? '';
       final department = appt?.department ?? 'Khoa Tim mạch';
       final doctorId = appt?.doctorId ?? 'dr-linh';
-      final patientId = appt?.patientId ?? 'demo-patient';
+      final patientId = appt?.patientId ?? PatientSession.instance.patientId;
 
       final welcomeMsg = TeleconsultationMessage(
         id: 'msg-${DateTime.now().millisecondsSinceEpoch}',
@@ -318,6 +323,15 @@ class LocalTeleconsultationRepository implements TeleconsultationRepository {
   ) async {
     await TeleconsultationStore.instance.ensureLoaded();
     final all = TeleconsultationStore.instance.sessions;
+    if (!PatientSession.instance.isDemoAccount) {
+      return all
+          .where(
+            (s) =>
+                s.patientId == patientId ||
+                PatientSession.instance.matchesPatientId(s.patientId),
+          )
+          .toList();
+    }
     return all.where((s) => s.patientId == patientId).toList();
   }
 

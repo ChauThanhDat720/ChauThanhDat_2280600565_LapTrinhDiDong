@@ -1,5 +1,7 @@
 import '../../appointments/domain/appointment.dart';
+import '../../payments/data/payment_repository.dart';
 import 'package:flutter/material.dart';
+import '../../../core/session/patient_session.dart';
 import '../../../core/theme/app_theme.dart';
 import '../data/medication_reminder_repository.dart';
 import '../domain/medication_reminder.dart';
@@ -122,18 +124,42 @@ class _MedicationReminderScreenState extends State<MedicationReminderScreen>
   }
 
   Future<void> _importFromPrescriptions() async {
-    final prescriptions = AppointmentStore.instance.appointments
-        .where((a) =>
-            a.status == AppointmentStatus.completed &&
-            a.prescription != null &&
-            a.prescription!.trim().isNotEmpty)
+    final completedWithPrescription = AppointmentStore.instance.appointments
+        .where(
+          (a) =>
+              PatientSession.instance.matchesPatientId(a.patientId) &&
+              a.status == AppointmentStatus.completed &&
+              a.prescription != null &&
+              a.prescription!.trim().isNotEmpty,
+        )
         .toList();
+
+    if (completedWithPrescription.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chưa có toa thuốc hoàn thành nào từ bác sĩ để đồng bộ.'),
+        ),
+      );
+      return;
+    }
+
+    final paymentRepo = LocalPaymentRepository();
+    final prescriptions = <Appointment>[];
+    for (final apt in completedWithPrescription) {
+      final inv = await paymentRepo.getInvoiceForAppointment(apt.id);
+      if (inv.isPaid) {
+        prescriptions.add(apt);
+      }
+    }
 
     if (prescriptions.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Chưa có toa thuốc hoàn thành nào từ bác sĩ để đồng bộ.'),
+          content: Text(
+            'Bạn có đơn thuốc chưa thanh toán viện phí. Vui lòng hoàn tất thanh toán hóa đơn để nhận thuốc và phân lịch nhắc uống!',
+          ),
         ),
       );
       return;

@@ -13,6 +13,7 @@ import '../../medical_records/presentation/medical_record_pdf_preview_screen.dar
 import '../../medical_records/presentation/lab_results_detail_screen.dart';
 import 'digital_boarding_pass_screen.dart';
 import '../../payments/data/payment_repository.dart';
+import '../../payments/domain/invoice.dart';
 import '../../payments/presentation/vietqr_payment_screen.dart';
 import '../../payments/presentation/e_invoice_screen.dart';
 import '../../reminders/data/medication_reminder_repository.dart';
@@ -169,6 +170,44 @@ class AppointmentDetailScreen extends StatefulWidget {
 class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   late Appointment _appointment = widget.appointment;
   bool _cancelling = false;
+  Invoice? _invoice;
+  bool get _isInvoicePaid => _invoice?.isPaid == true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInvoice();
+  }
+
+  Future<void> _loadInvoice() async {
+    try {
+      final paymentRepo = LocalPaymentRepository();
+      final inv = await paymentRepo.getInvoiceForAppointment(_appointment.id);
+      if (mounted) setState(() => _invoice = inv);
+    } catch (_) {}
+  }
+
+  Future<void> _openPaymentScreen() async {
+    final nav = Navigator.of(context);
+    final paymentRepo = LocalPaymentRepository();
+    final invoice =
+        _invoice ?? await paymentRepo.getInvoiceForAppointment(_appointment.id);
+    if (!mounted) return;
+    if (invoice.isPaid) {
+      await nav.push(
+        MaterialPageRoute(builder: (_) => EInvoiceScreen(invoice: invoice)),
+      );
+    } else {
+      await nav.push(
+        MaterialPageRoute(
+          builder: (_) =>
+              VietQrPaymentScreen(invoice: invoice, repository: paymentRepo),
+        ),
+      );
+    }
+    await _loadInvoice();
+  }
+
   bool get _canCancel =>
       _appointment.status == AppointmentStatus.pending ||
       _appointment.status == AppointmentStatus.confirmed;
@@ -427,50 +466,113 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                 if (_appointment.prescription != null &&
                     _appointment.prescription!.isNotEmpty) ...[
                   const Divider(height: 20),
-                  const Text(
-                    'Đơn thuốc & Hướng dẫn sử dụng:',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _appointment.prescription!,
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                  const SizedBox(height: 10),
-                  FilledButton.tonalIcon(
-                    icon: const Icon(Icons.alarm_add_rounded, size: 18),
-                    label: const Text('Tạo lịch nhắc uống thuốc từ toa này'),
-                    onPressed: () async {
-                      try {
-                        const reminderRepo =
-                            RemoteMedicationReminderRepository();
-                        await reminderRepo.createFromPrescription(
-                          prescription: _appointment.prescription!,
-                          appointmentId: _appointment.id,
-                          patientId: _appointment.patientId,
-                        );
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Đã tạo lịch nhắc uống thuốc thành công từ đơn thuốc!',
+                  if (_isInvoicePaid) ...[
+                    const Text(
+                      'Đơn thuốc & Hướng dẫn sử dụng:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _appointment.prescription!,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    const SizedBox(height: 10),
+                    FilledButton.tonalIcon(
+                      icon: const Icon(Icons.alarm_add_rounded, size: 18),
+                      label: const Text('Tạo lịch nhắc uống thuốc từ toa này'),
+                      onPressed: () async {
+                        try {
+                          const reminderRepo =
+                              RemoteMedicationReminderRepository();
+                          await reminderRepo.createFromPrescription(
+                            prescription: _appointment.prescription!,
+                            appointmentId: _appointment.id,
+                            patientId: _appointment.patientId,
+                          );
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Đã tạo lịch nhắc uống thuốc thành công từ đơn thuốc!',
+                              ),
+                              backgroundColor: AppColors.success,
                             ),
-                            backgroundColor: AppColors.success,
+                          );
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const MedicationReminderScreen(),
+                            ),
+                          );
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Lỗi tạo lịch nhắc: $e')),
+                          );
+                        }
+                      },
+                    ),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFF59E0B)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(
+                                Icons.lock_clock_rounded,
+                                color: Color(0xFFD97706),
+                                size: 20,
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Đơn thuốc điện tử & Nhắc uống thuốc đang khóa',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: Color(0xFF92400E),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        );
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const MedicationReminderScreen(),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Bác sĩ đã kê đơn thuốc cho lượt khám này. Vui lòng hoàn tất thanh toán viện phí và tiền thuốc để nhận đơn thuốc chi tiết và phân lịch nhắc uống thuốc tự động.',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: Color(0xFF78350F),
+                              height: 1.35,
+                            ),
                           ),
-                        );
-                      } catch (e) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Lỗi tạo lịch nhắc: $e')),
-                        );
-                      }
-                    },
-                  ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFFD97706),
+                                foregroundColor: Colors.white,
+                              ),
+                              icon: const Icon(Icons.qr_code_rounded, size: 18),
+                              label: const Text(
+                                'Thanh toán viện phí để nhận đơn thuốc',
+                              ),
+                              onPressed: _openPaymentScreen,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
                 if (_appointment.statusNote != null &&
                     _appointment.statusNote!.isNotEmpty) ...[
@@ -580,10 +682,14 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFF0FDFA),
+              color: _isInvoicePaid
+                  ? const Color(0xFFF0FDFA)
+                  : const Color(0xFFFFFBEB),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: AppColors.primary.withValues(alpha: 0.35),
+                color: _isInvoicePaid
+                    ? AppColors.primary.withValues(alpha: 0.35)
+                    : const Color(0xFFF59E0B),
               ),
             ),
             child: Column(
@@ -591,16 +697,22 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(
-                      Icons.support_agent_rounded,
-                      color: AppColors.primary,
+                    Icon(
+                      _isInvoicePaid
+                          ? Icons.support_agent_rounded
+                          : Icons.lock_outline_rounded,
+                      color: _isInvoicePaid
+                          ? AppColors.primary
+                          : const Color(0xFFD97706),
                     ),
                     const SizedBox(width: 8),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         'Kênh Tư vấn Y tế Hậu khám (7 ngày)',
                         style: TextStyle(
-                          color: AppColors.primary,
+                          color: _isInvoicePaid
+                              ? AppColors.primary
+                              : const Color(0xFF92400E),
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                         ),
@@ -612,13 +724,19 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFCCFBF1),
+                        color: _isInvoicePaid
+                            ? const Color(0xFFCCFBF1)
+                            : const Color(0xFFFEF3C7),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Text(
-                        '🟢 7 ngày hỗ trợ',
+                      child: Text(
+                        _isInvoicePaid
+                            ? '🟢 7 ngày hỗ trợ'
+                            : '🔒 Chờ thanh toán',
                         style: TextStyle(
-                          color: AppColors.primary,
+                          color: _isInvoicePaid
+                              ? AppColors.primary
+                              : const Color(0xFFB45309),
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
@@ -628,9 +746,13 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Bạn có thắc mắc về liều dùng, tác dụng phụ của thuốc hoặc triệu chứng sau khám? Hãy nhắn tin trao đổi trực tiếp với ${_appointment.doctorName}.',
-                  style: const TextStyle(
-                    color: Color(0xFF134E4A),
+                  _isInvoicePaid
+                      ? 'Bạn có thắc mắc về liều dùng, tác dụng phụ của thuốc hoặc triệu chứng sau khám? Hãy nhắn tin trao đổi trực tiếp với ${_appointment.doctorName}.'
+                      : 'Kênh tư vấn trực tiếp với ${_appointment.doctorName} chỉ được kích hoạt sau khi bạn hoàn tất thanh toán viện phí & đơn thuốc.',
+                  style: TextStyle(
+                    color: _isInvoicePaid
+                        ? const Color(0xFF134E4A)
+                        : const Color(0xFF78350F),
                     fontSize: 13,
                     height: 1.35,
                   ),
@@ -640,19 +762,32 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                   width: double.infinity,
                   child: FilledButton.icon(
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: _isInvoicePaid
+                          ? AppColors.primary
+                          : const Color(0xFFD97706),
                       foregroundColor: Colors.white,
                     ),
-                    icon: const Icon(
-                      Icons.chat_bubble_outline_rounded,
+                    icon: Icon(
+                      _isInvoicePaid
+                          ? Icons.chat_bubble_outline_rounded
+                          : Icons.payments_rounded,
                       size: 18,
                     ),
-                    label: Text('Nhắn tin với ${_appointment.doctorName}'),
+                    label: Text(
+                      _isInvoicePaid
+                          ? 'Nhắn tin với ${_appointment.doctorName}'
+                          : 'Thanh toán viện phí để mở khóa tư vấn',
+                    ),
                     onPressed: () {
+                      if (!_isInvoicePaid) {
+                        _openPaymentScreen();
+                        return;
+                      }
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => PostCareChatScreen(
                             appointmentId: _appointment.id,
+                            requirePayment: true,
                             currentUserId: _appointment.patientId,
                             currentUserName: _appointment.patientName,
                           ),
@@ -666,9 +801,28 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
           ),
           const SizedBox(height: 12),
           FilledButton.icon(
-            icon: const Icon(Icons.picture_as_pdf_rounded),
-            label: const Text('Xuất phiếu khám & Đơn thuốc (PDF)'),
+            icon: Icon(
+              _isInvoicePaid
+                  ? Icons.picture_as_pdf_rounded
+                  : Icons.lock_outline_rounded,
+            ),
+            label: Text(
+              _isInvoicePaid
+                  ? 'Xuất phiếu khám & Đơn thuốc (PDF)'
+                  : 'Thanh toán để xuất Đơn thuốc (PDF)',
+            ),
             onPressed: () {
+              if (!_isInvoicePaid) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Vui lòng hoàn tất thanh toán viện phí trước khi nhận và xuất đơn thuốc.',
+                    ),
+                  ),
+                );
+                _openPaymentScreen();
+                return;
+              }
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) =>
@@ -824,31 +978,15 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
             foregroundColor: AppColors.primary,
             side: const BorderSide(color: AppColors.primary),
           ),
-          icon: const Icon(Icons.payments_rounded),
-          label: const Text('Thanh toán viện phí & Hóa đơn VietQR'),
-          onPressed: () async {
-            final nav = Navigator.of(context);
-            final paymentRepo = LocalPaymentRepository();
-            final invoice = await paymentRepo.getInvoiceForAppointment(
-              _appointment.id,
-            );
-            if (invoice.isPaid) {
-              nav.push(
-                MaterialPageRoute(
-                  builder: (_) => EInvoiceScreen(invoice: invoice),
-                ),
-              );
-            } else {
-              nav.push(
-                MaterialPageRoute(
-                  builder: (_) => VietQrPaymentScreen(
-                    invoice: invoice,
-                    repository: paymentRepo,
-                  ),
-                ),
-              );
-            }
-          },
+          icon: Icon(
+            _isInvoicePaid ? Icons.verified_rounded : Icons.payments_rounded,
+          ),
+          label: Text(
+            _isInvoicePaid
+                ? 'Xem Hóa đơn Điện tử (Đã thanh toán)'
+                : 'Thanh toán viện phí & Hóa đơn VietQR',
+          ),
+          onPressed: _openPaymentScreen,
         ),
         const SizedBox(height: 24),
         if (_canCancel)

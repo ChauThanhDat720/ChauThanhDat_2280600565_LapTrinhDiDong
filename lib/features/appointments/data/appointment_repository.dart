@@ -1,3 +1,4 @@
+import '../../../core/session/patient_session.dart';
 import '../../../core/utils/app_timezone.dart';
 import '../../../core/network/api_client.dart';
 import '../../doctors/domain/doctor.dart';
@@ -37,7 +38,6 @@ abstract interface class AppointmentRepository {
 class LocalAppointmentRepository implements AppointmentRepository {
   const LocalAppointmentRepository();
   static Future<void> _serial = Future.value();
-  static const _patientId = 'demo-patient';
   static const _slotDuration = Duration(minutes: 30);
   static final Set<String> _doctorDaysOff = {};
 
@@ -124,14 +124,18 @@ class LocalAppointmentRepository implements AppointmentRepository {
         );
       }
       final now = DateTime.now();
+      final currentPatientId = PatientSession.instance.patientId;
+      final currentPatientName = PatientSession.instance.email.isNotEmpty
+          ? PatientSession.instance.name
+          : 'Nguyễn Văn An (BN-01)';
       final saved = Appointment(
         id: appointment.id.isEmpty
             ? 'local-${now.microsecondsSinceEpoch}'
             : appointment.id,
-        patientId: _patientId,
+        patientId: currentPatientId,
         patientName: appointment.patientName.isNotEmpty
             ? appointment.patientName
-            : 'Nguyễn Văn An (BN-01)',
+            : currentPatientName,
         doctorId: appointment.doctorId,
         doctorName: appointment.doctorName,
         specialty: appointment.specialty,
@@ -158,14 +162,18 @@ class LocalAppointmentRepository implements AppointmentRepository {
   @override
   Future<List<Appointment>> getMyAppointments() async => List.unmodifiable(
     AppointmentStore.instance.appointments.where(
-      (item) => item.patientId == _patientId,
+      (item) => PatientSession.instance.matchesPatientId(item.patientId),
     ),
   );
   @override
   Future<Appointment?> getAppointmentById(String id) async => AppointmentStore
       .instance
       .appointments
-      .where((item) => item.id == id && item.patientId == _patientId)
+      .where(
+        (item) =>
+            item.id == id &&
+            PatientSession.instance.matchesPatientId(item.patientId),
+      )
       .firstOrNull;
   @override
   Future<Appointment> cancelAppointment(String id, {String? reason}) {

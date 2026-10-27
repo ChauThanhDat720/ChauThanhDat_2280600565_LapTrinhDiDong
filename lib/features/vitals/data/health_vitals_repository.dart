@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../../../core/network/api_client.dart';
+import '../../../core/session/patient_session.dart';
 import '../domain/health_vital.dart';
 
 abstract class HealthVitalsRepository {
@@ -148,33 +149,51 @@ class LocalHealthVitalsRepository implements HealthVitalsRepository {
     _vitals.addAll(samples);
   }
 
+  List<HealthVital> _filterForPatient(String? patientId) {
+    if (patientId != null &&
+        patientId.isNotEmpty &&
+        patientId != 'patient-1') {
+      return _vitals
+          .where(
+            (v) =>
+                v.patientId == patientId ||
+                PatientSession.instance.matchesPatientId(v.patientId),
+          )
+          .toList();
+    }
+    return _vitals
+        .where((v) => PatientSession.instance.matchesPatientId(v.patientId))
+        .toList();
+  }
+
   @override
   Future<List<HealthVital>> getVitalsHistory({String? patientId, int days = 30}) async {
-    final list = List<HealthVital>.from(_vitals);
+    final list = _filterForPatient(patientId);
     list.sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
     return list;
   }
 
   @override
   Future<HealthVital?> getLatestVital({String? patientId}) async {
-    if (_vitals.isEmpty) return null;
-    final list = List<HealthVital>.from(_vitals);
+    final list = _filterForPatient(patientId);
+    if (list.isEmpty) return null;
     list.sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
     return list.first;
   }
 
   @override
   Future<VitalsSummary> getVitalsSummary({String? patientId}) async {
+    final list = _filterForPatient(patientId);
+    if (list.isEmpty) return const VitalsSummary();
     final latest = await getLatestVital(patientId: patientId);
-    if (_vitals.isEmpty) return const VitalsSummary();
 
     int sumSys = 0;
     int sumDia = 0;
-    int count = _vitals.length;
+    int count = list.length;
     int dangerCount = 0;
     int warningCount = 0;
 
-    for (final v in _vitals) {
+    for (final v in list) {
       sumSys += v.systolic;
       sumDia += v.diastolic;
       if (v.healthStatus == 'danger') dangerCount++;
@@ -199,6 +218,12 @@ class LocalHealthVitalsRepository implements HealthVitalsRepository {
     final id = vital.id.isEmpty
         ? 'VIT-${DateTime.now().millisecondsSinceEpoch}'
         : vital.id;
+    final resolvedPatientId =
+        (vital.patientId.isEmpty ||
+            (vital.patientId == 'patient-1' &&
+                !PatientSession.instance.isDemoAccount))
+        ? PatientSession.instance.patientId
+        : vital.patientId;
 
     // Evaluate category
     String healthStatus = 'optimal';
@@ -219,7 +244,7 @@ class LocalHealthVitalsRepository implements HealthVitalsRepository {
 
     final updated = HealthVital(
       id: id,
-      patientId: vital.patientId,
+      patientId: resolvedPatientId,
       appointmentId: vital.appointmentId,
       systolic: vital.systolic,
       diastolic: vital.diastolic,

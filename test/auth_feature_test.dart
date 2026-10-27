@@ -2,11 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_hospital/core/models/app_user.dart';
 import 'package:smart_hospital/core/session/patient_session.dart';
+import 'package:smart_hospital/features/appointments/data/appointment_repository.dart';
+import 'package:smart_hospital/features/appointments/domain/appointment.dart';
+import 'package:smart_hospital/features/appointments/presentation/appointment_list_screen.dart';
 import 'package:smart_hospital/features/auth/presentation/login_screen.dart';
 import 'package:smart_hospital/features/auth/presentation/role_home.dart';
 import 'package:smart_hospital/features/auth/repositories/auth_repository.dart';
 import 'package:smart_hospital/features/doctors/presentation/doctor_dashboard_screen.dart';
+import 'package:smart_hospital/features/family/data/family_repository.dart';
 import 'package:smart_hospital/features/home/presentation/home_screen.dart';
+import 'package:smart_hospital/features/payments/data/payment_repository.dart';
+import 'package:smart_hospital/features/reminders/data/medication_reminder_repository.dart';
+import 'package:smart_hospital/features/teleconsultation/presentation/post_care_chat_screen.dart';
+import 'package:smart_hospital/features/vaccination/data/vaccination_repository.dart';
+import 'package:smart_hospital/features/vitals/data/health_vitals_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -323,6 +332,120 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getBool('auth_remember_me'), isTrue);
       expect(prefs.getString('auth_remembered_email'), 'patient.an@hospital.com');
+    });
+
+    test('Newly registered patient starts with zero pre-existing data across all stores', () async {
+      const authRepo = LocalAuthRepository();
+      await authRepo.signUp(
+        name: 'Phạm Minh Khôi',
+        email: 'khoi.newuser@gmail.com',
+        password: 'Password@123',
+        phone: '0977889900',
+      );
+
+      expect(PatientSession.instance.isDemoAccount, isFalse);
+
+      // 1. Appointments should be empty
+      const apptRepo = LocalAppointmentRepository();
+      expect(await apptRepo.getMyAppointments(), isEmpty);
+
+      // 2. Medication reminders and today's doses should be empty
+      final reminderRepo = LocalMedicationReminderRepository();
+      expect(await reminderRepo.getReminders(), isEmpty);
+      expect(await reminderRepo.getTodayDoses(), isEmpty);
+
+      // 3. Health vitals should be empty
+      final vitalsRepo = LocalHealthVitalsRepository();
+      expect(await vitalsRepo.getVitalsHistory(), isEmpty);
+      expect((await vitalsRepo.getVitalsSummary()).totalRecords, 0);
+
+      // 4. Invoices should be empty
+      final paymentRepo = LocalPaymentRepository();
+      expect(await paymentRepo.getInvoices(), isEmpty);
+
+      // 5. Family members and vaccinations should be empty
+      final familyRepo = LocalFamilyRepository();
+      expect(await familyRepo.getMembers(), isEmpty);
+      expect(await const LocalVaccinationRepository().getVaccinations(), isEmpty);
+    });
+
+    testWidgets('Unpaid completed appointment gates prescription and post-care chat until paid', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      LocalPaymentRepository.resetForTest();
+      AppointmentStore.instance.clearForTest();
+
+      final apt = Appointment(
+        id: 'APT-GATE-01',
+        patientId: 'demo-patient',
+        patientName: 'Nguyễn Văn An',
+        doctorId: 'dr-linh',
+        doctorName: 'BS. Trần Thảo Linh',
+        department: 'Khoa Tim mạch',
+        specialty: 'Tim mạch',
+        date: DateTime.now(),
+        time: '09:00',
+        reason: 'Tức ngực',
+        status: AppointmentStatus.completed,
+        diagnosis: 'Cơn đau thắt ngực ổn định',
+        prescription: '1. Concor 2.5mg - 1 viên/ngày',
+      );
+      AppointmentStore.instance.addAppointment(apt);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppointmentDetailScreen(
+            appointment: apt,
+            repository: const LocalAppointmentRepository(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // While unpaid: prescription text is hidden and locked message is shown
+      expect(
+        find.text('Đơn thuốc điện tử & Nhắc uống thuốc đang khóa'),
+        findsOneWidget,
+      );
+      expect(find.text('1. Concor 2.5mg - 1 viên/ngày'), findsNothing);
+      expect(
+        find.text('Thanh toán viện phí để mở khóa tư vấn'),
+        findsOneWidget,
+      );
+
+      // PostCareChatScreen with requirePayment: true shows lock screen while unpaid
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: PostCareChatScreen(
+            appointmentId: 'APT-GATE-01',
+            requirePayment: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Chưa hoàn tất thanh toán viện phí'), findsOneWidget);
+
+      // Now simulate payment of the invoice
+      final paymentRepo = LocalPaymentRepository();
+      final inv = await paymentRepo.getInvoiceForAppointment('APT-GATE-01');
+      await paymentRepo.simulatePayment(inv.id);
+
+      // Re-open AppointmentDetailScreen after payment -> unlocked!
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppointmentDetailScreen(
+            appointment: apt,
+            repository: const LocalAppointmentRepository(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('1. Concor 2.5mg - 1 viên/ngày'), findsOneWidget);
+      expect(find.text('Tạo lịch nhắc uống thuốc từ toa này'), findsOneWidget);
+      expect(find.text('Nhắn tin với BS. Trần Thảo Linh'), findsOneWidget);
     });
   });
 }

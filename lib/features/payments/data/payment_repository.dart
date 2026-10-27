@@ -1,5 +1,6 @@
 import '../../appointments/domain/appointment.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/session/patient_session.dart';
 import '../domain/invoice.dart';
 
 abstract class PaymentRepository {
@@ -11,19 +12,31 @@ abstract class PaymentRepository {
 }
 
 class LocalPaymentRepository implements PaymentRepository {
+  static final List<Invoice> _sharedInvoices = [];
+  static bool _seeded = false;
+
   LocalPaymentRepository({List<Invoice>? initialInvoices}) {
     if (initialInvoices != null) {
-      _invoices.addAll(initialInvoices);
+      _invoices = List<Invoice>.from(initialInvoices);
     } else {
-      _seedDefaultInvoices();
+      if (!_seeded) {
+        _seeded = true;
+        _seedDefaultInvoices(_sharedInvoices);
+      }
+      _invoices = _sharedInvoices;
     }
   }
 
-  final List<Invoice> _invoices = [];
+  late final List<Invoice> _invoices;
 
-  void _seedDefaultInvoices() {
+  static void resetForTest() {
+    _sharedInvoices.clear();
+    _seeded = false;
+  }
+
+  static void _seedDefaultInvoices(List<Invoice> target) {
     final now = DateTime.now();
-    _invoices.addAll([
+    target.addAll([
       Invoice(
         id: 'inv-101',
         appointmentId: 'APT-101',
@@ -143,12 +156,32 @@ class LocalPaymentRepository implements PaymentRepository {
 
   @override
   Future<Invoice> getInvoiceForAppointment(String appointmentId) async {
-    final found = _invoices.where((e) => e.appointmentId == appointmentId);
-    if (found.isNotEmpty) return found.first;
-
     final apt = AppointmentStore.instance.appointments
         .where((a) => a.id == appointmentId)
         .firstOrNull;
+
+    final foundIdx = _invoices.indexWhere(
+      (e) => e.appointmentId == appointmentId,
+    );
+    if (foundIdx >= 0) {
+      final existing = _invoices[foundIdx];
+      if (!existing.isPaid &&
+          existing.medicineFee == 0 &&
+          apt?.prescription != null &&
+          apt!.prescription!.trim().isNotEmpty) {
+        final parsedMeds = Invoice.parsePrescriptionToItems(apt.prescription!);
+        final medFee = parsedMeds.fold(0, (sum, i) => sum + i.totalPrice);
+        final updatedItems = [...existing.items, ...parsedMeds];
+        final updated = existing.copyWith(
+          medicineFee: medFee,
+          totalAmount: existing.examinationFee + medFee + existing.otherFee,
+          items: updatedItems,
+        );
+        _invoices[foundIdx] = updated;
+        return updated;
+      }
+      return existing;
+    }
 
     final items = <InvoiceItem>[];
     const examFee = 150000;
@@ -185,13 +218,23 @@ class LocalPaymentRepository implements PaymentRepository {
     }
 
     final totalAmount = examFee + medicineFee + otherFee;
+    final resolvedPatientId = apt?.patientId.isNotEmpty == true
+        ? apt!.patientId
+        : (PatientSession.instance.isDemoAccount
+              ? 'BN-01'
+              : PatientSession.instance.patientId);
+    final resolvedPatientName = apt?.patientName.isNotEmpty == true
+        ? apt!.patientName
+        : (PatientSession.instance.email.isNotEmpty
+              ? PatientSession.instance.name
+              : 'Bệnh nhân');
 
     // Tự sinh hóa đơn mới cho lịch hẹn với đầy đủ bảng kê thuốc & dịch vụ
     final newInv = Invoice(
       id: 'inv-${DateTime.now().millisecondsSinceEpoch}',
       appointmentId: appointmentId,
-      patientId: apt?.patientId.isNotEmpty == true ? apt!.patientId : 'BN-01',
-      patientName: apt?.patientName.isNotEmpty == true ? apt!.patientName : 'Bệnh nhân',
+      patientId: resolvedPatientId,
+      patientName: resolvedPatientName,
       doctorId: apt?.doctorId,
       doctorName: apt?.doctorName ?? 'BS. Trần Thảo Linh',
       department: apt?.department ?? 'Khoa Tim mạch',
@@ -220,7 +263,19 @@ class LocalPaymentRepository implements PaymentRepository {
   Future<List<Invoice>> getInvoices({String? patientId, String? status}) async {
     var list = List<Invoice>.from(_invoices);
     if (patientId != null && patientId.isNotEmpty) {
-      list = list.where((e) => e.patientId == patientId).toList();
+      list = list
+          .where(
+            (e) =>
+                e.patientId == patientId ||
+                (patientId == PatientSession.instance.patientId &&
+                    PatientSession.instance.matchesPatientId(e.patientId)),
+          )
+          .toList();
+    } else if (PatientSession.instance.role == 'patient' &&
+        !PatientSession.instance.isDemoAccount) {
+      list = list
+          .where((e) => PatientSession.instance.matchesPatientId(e.patientId))
+          .toList();
     }
     if (status != null && status.isNotEmpty) {
       list = list.where((e) => e.paymentStatus.name == status.toLowerCase()).toList();
@@ -249,11 +304,12 @@ class LocalPaymentRepository implements PaymentRepository {
 
   @override
   Future<Map<String, dynamic>> getReconciliationReport() async {
+    final visible = await getInvoices();
     int totalRevenue = 0;
     int paidCount = 0;
     int unpaidCount = 0;
 
-    for (final inv in _invoices) {
+    for (final inv in visible) {
       if (inv.isPaid) {
         paidCount++;
         totalRevenue += inv.paidAmount > 0 ? inv.paidAmount : inv.totalAmount;
@@ -264,7 +320,7 @@ class LocalPaymentRepository implements PaymentRepository {
 
     return {
       'reconciliationDate': DateTime.now().toIso8601String(),
-      'totalInvoices': _invoices.length,
+      'totalInvoices': visible.length,
       'paidInvoices': paidCount,
       'unpaidInvoices': unpaidCount,
       'totalRevenueVnd': totalRevenue,
