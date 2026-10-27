@@ -1,9 +1,12 @@
 import json
+import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from configure_aws import configuration
 
 
@@ -41,13 +44,14 @@ class ConfigurationTests(unittest.TestCase):
     def test_cli_writes_config_without_overwriting_existing_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             source, target = Path(tmp) / "outputs.json", Path(tmp) / "aws.local.json"
-            source.write_text(json.dumps(outputs()))
-            command = ["python3", str(Path(__file__).with_name("configure_aws.py")), "--outputs", str(source), "--output", str(target)]
-            result = subprocess.run(command, capture_output=True, text=True)
+            source.write_text(json.dumps(outputs()), encoding="utf-8")
+            command = [sys.executable, str(Path(__file__).with_name("configure_aws.py")), "--outputs", str(source), "--output", str(target)]
+            env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+            result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", env=env)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(json.loads(target.read_text())["BACKEND_MODE"], "aws")
-            self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
-            self.assertEqual(subprocess.run(command + ["--force"], capture_output=True).returncode, 0)
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["BACKEND_MODE"], "aws")
+            self.assertNotEqual(subprocess.run(command, capture_output=True, encoding="utf-8", env=env).returncode, 0)
+            self.assertEqual(subprocess.run(command + ["--force"], capture_output=True, encoding="utf-8", env=env).returncode, 0)
 
 
 if __name__ == "__main__":
