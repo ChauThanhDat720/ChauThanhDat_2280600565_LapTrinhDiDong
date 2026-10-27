@@ -3,6 +3,9 @@ import '../../../core/repositories/application_backend.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../payments/data/payment_repository.dart';
+import '../../payments/domain/invoice.dart';
+import '../../payments/presentation/vietqr_payment_screen.dart';
 import '../data/appointment_repository.dart';
 import '../domain/appointment.dart';
 import 'digital_boarding_pass_screen.dart';
@@ -59,6 +62,56 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
   Future<void> _processCheckin(String rawCode) async {
     if (rawCode.trim().isEmpty) return;
     final cleanId = rawCode.trim().replaceAll('CHECKIN:', '');
+
+    if (widget.repository is LocalAppointmentRepository ||
+        widget.repository is RemoteAppointmentRepository) {
+      final paymentRepo = LocalPaymentRepository();
+      final bookingPaid = await paymentRepo.isStagePaid(
+        cleanId,
+        PaymentStage.booking,
+      );
+      if (!bookingPaid && mounted) {
+        final inv = await paymentRepo.getOrCreateBookingInvoice(cleanId);
+        if (!mounted) return;
+        final payNow = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(
+              Icons.lock_clock_rounded,
+              color: Color(0xFFD97706),
+              size: 48,
+            ),
+            title: const Text('Chưa thanh toán Phí khám (Đợt 1)'),
+            content: const Text(
+              'Bệnh nhân cần hoàn tất thanh toán Phí đăng ký khám chuyên khoa (150.000 đ) trước khi được cấp Mã QR Check-in và lấy Số thứ tự (STT) vào phòng khám.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Đóng'),
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFD97706),
+                ),
+                icon: const Icon(Icons.qr_code_rounded, size: 18),
+                label: const Text('Thanh toán Phí khám ngay'),
+                onPressed: () => Navigator.pop(ctx, true),
+              ),
+            ],
+          ),
+        );
+        if (payNow == true && mounted) {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  VietQrPaymentScreen(invoice: inv, repository: paymentRepo),
+            ),
+          );
+        }
+        return;
+      }
+    }
 
     setState(() => _processing = true);
     try {

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../appointments/domain/appointment.dart';
+import '../../payments/data/payment_repository.dart';
+import '../../payments/domain/invoice.dart';
+import '../../payments/presentation/vietqr_payment_screen.dart';
 import '../data/lab_repository.dart';
 import '../domain/lab_result.dart';
 import 'medical_imaging_viewer.dart';
@@ -15,12 +18,14 @@ class LabResultsDetailScreen extends StatefulWidget {
     this.appointment,
     this.appointmentId,
     this.repository = const LocalLabRepository(),
+    this.requirePayment = false,
   }) : assert(appointment != null || appointmentId != null,
             'Must provide either appointment or appointmentId');
 
   final Appointment? appointment;
   final String? appointmentId;
   final LabRepository repository;
+  final bool requirePayment;
 
   @override
   State<LabResultsDetailScreen> createState() => _LabResultsDetailScreenState();
@@ -31,6 +36,8 @@ class _LabResultsDetailScreenState extends State<LabResultsDetailScreen>
   late TabController _tabController;
   _MetricFilter _filter = _MetricFilter.all;
   bool _isLoading = true;
+  bool _isPaymentLocked = false;
+  Invoice? _labInvoice;
   LabReport? _report;
   String? _errorMessage;
 
@@ -53,9 +60,30 @@ class _LabResultsDetailScreenState extends State<LabResultsDetailScreen>
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _isPaymentLocked = false;
     });
 
     try {
+      final paymentRepo = LocalPaymentRepository();
+      Invoice? labInv = await paymentRepo.getLabInvoice(_targetId);
+      if (widget.requirePayment || (labInv != null && !labInv.isPaid)) {
+        labInv ??= await paymentRepo.createOrUpdateLabInvoice(_targetId, const [
+          'Tổng phân tích tế bào máu (CBC)',
+          'Sinh hóa máu (Glucose, mỡ máu)',
+        ]);
+        if (!labInv.isPaid) {
+          if (mounted) {
+            setState(() {
+              _labInvoice = labInv;
+              _isPaymentLocked = true;
+              _isLoading = false;
+            });
+          }
+          return;
+        }
+      }
+      _labInvoice = labInv;
+
       LabReport? report;
       if (widget.appointment != null) {
         report = await widget.repository
@@ -189,13 +217,194 @@ class _LabResultsDetailScreenState extends State<LabResultsDetailScreen>
                     ),
                   ),
                 )
-              : _buildContent(_report!),
+              : _isPaymentLocked
+                  ? _buildLabPaymentLockedView()
+                  : _buildContent(_report!),
+    );
+  }
+
+  Widget _buildLabPaymentLockedView() {
+    final inv = _labInvoice;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFEF3C7),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.lock_clock_rounded,
+                  size: 40,
+                  color: Color(0xFFD97706),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Đợt 2: Chưa thanh toán Phí Xét nghiệm & CLS',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF92400E),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Theo quy trình bệnh viện, bệnh nhân cần hoàn tất thanh toán phí chỉ định Cận lâm sàng (Đợt 2) trước khi được cấp Mã QR Phòng Xét nghiệm (CLS-QR) và xem kết quả.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: Color(0xFF78350F),
+                  height: 1.4,
+                ),
+              ),
+              if (inv != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ...inv.items.map(
+                        (item) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.biotech_rounded,
+                                size: 16,
+                                color: Color(0xFFD97706),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  item.title,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const Divider(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Cần thanh toán (BHYT đã trừ):',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          Text(
+                            Invoice.formatCurrency(inv.patientPayable),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                              color: Color(0xFFD97706),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFD97706),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                  label: const Text(
+                    'Thanh toán Phí Xét nghiệm (Đợt 2 - VietQR)',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () async {
+                    final repo = LocalPaymentRepository();
+                    final targetInv =
+                        inv ??
+                        await repo.createOrUpdateLabInvoice(_targetId, const [
+                          'Tổng phân tích tế bào máu (CBC)',
+                          'Sinh hóa máu (Glucose, mỡ máu)',
+                        ]);
+                    if (!mounted) return;
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => VietQrPaymentScreen(
+                          invoice: targetInv,
+                          repository: repo,
+                        ),
+                      ),
+                    );
+                    await _loadReport();
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildContent(LabReport report) {
     return Column(
       children: [
+        if (_labInvoice?.isPaid == true)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: const Color(0xFFECFDF5),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.qr_code_2_rounded,
+                  color: Color(0xFF059669),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Đã thanh toán Phí CLS (Đợt 2) • Mã QR Phòng Xét nghiệm: CLS-QR:$_targetId',
+                    style: const TextStyle(
+                      color: Color(0xFF065F46),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         _buildPatientBanner(report),
         _buildTabBar(),
         Expanded(

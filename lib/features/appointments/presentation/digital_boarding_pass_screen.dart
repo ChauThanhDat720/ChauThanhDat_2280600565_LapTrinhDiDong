@@ -9,15 +9,20 @@ import '../domain/appointment.dart';
 import '../domain/hospital_navigation.dart';
 import '../../clinical_intake/data/clinical_intake_repository.dart';
 import '../../clinical_intake/presentation/pre_visit_intake_screen.dart';
+import '../../payments/data/payment_repository.dart';
+import '../../payments/domain/invoice.dart';
+import '../../payments/presentation/vietqr_payment_screen.dart';
 
 class DigitalBoardingPassScreen extends StatefulWidget {
   const DigitalBoardingPassScreen({
     super.key,
     required this.appointment,
+    this.requirePayment = false,
     AppointmentRepository? repository,
   }) : _providedRepository = repository;
 
   final Appointment appointment;
+  final bool requirePayment;
   final AppointmentRepository? _providedRepository;
   AppointmentRepository get repository =>
       _providedRepository ?? ApplicationBackend.repositories.appointments;
@@ -30,11 +35,50 @@ class DigitalBoardingPassScreen extends StatefulWidget {
 class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
   late Appointment _appointment;
   bool _checkingIn = false;
+  bool _bookingPaid = true;
+  Invoice? _bookingInvoice;
+
+  bool get _enforcePayment =>
+      widget.requirePayment ||
+      widget.repository is LocalAppointmentRepository ||
+      widget.repository is RemoteAppointmentRepository;
 
   @override
   void initState() {
     super.initState();
     _appointment = widget.appointment;
+    if (_enforcePayment) {
+      _bookingPaid = _appointment.status == AppointmentStatus.checkedIn;
+      _loadBookingPaymentStatus();
+    }
+  }
+
+  Future<void> _loadBookingPaymentStatus() async {
+    final repo = LocalPaymentRepository();
+    final inv = await repo.getOrCreateBookingInvoice(_appointment.id);
+    final paid =
+        _appointment.status == AppointmentStatus.checkedIn ||
+        await repo.isStagePaid(_appointment.id, PaymentStage.booking);
+    if (mounted) {
+      setState(() {
+        _bookingInvoice = inv;
+        _bookingPaid = paid;
+      });
+    }
+  }
+
+  Future<void> _payBookingFee() async {
+    final repo = LocalPaymentRepository();
+    final inv =
+        _bookingInvoice ??
+        await repo.getOrCreateBookingInvoice(_appointment.id);
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VietQrPaymentScreen(invoice: inv, repository: repo),
+      ),
+    );
+    await _loadBookingPaymentStatus();
   }
 
   Future<void> _checkIn() async {
@@ -377,44 +421,88 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
 
                             const SizedBox(height: 20),
 
-                            // QR Code Section
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.grey.shade200),
+                            // QR Code Section (Gated on Stage 1 Booking Fee Payment)
+                            if (_bookingPaid) ...[
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.grey.shade200,
+                                  ),
+                                ),
+                                child: _QrCanvasView(
+                                  data: checkinCode,
+                                  size: 160,
+                                ),
                               ),
-                              child: _QrCanvasView(
-                                data: checkinCode,
-                                size: 160,
+                              const SizedBox(height: 8),
+                              Text(
+                                checkinCode,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontFamily: 'monospace',
+                                  color: AppColors.mutedText,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              checkinCode,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontFamily: 'monospace',
-                                color: AppColors.mutedText,
+                              const SizedBox(height: 6),
+                              Text(
+                                isCheckedIn
+                                    ? 'Mã QR đã được xác thực tiếp đón thành công'
+                                    : 'Đưa mã QR này cho nhân viên tiếp đón tại cửa phòng khám',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isCheckedIn
+                                      ? const Color(0xFF0D9488)
+                                      : AppColors.mutedText,
+                                  fontWeight: isCheckedIn
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              isCheckedIn
-                                  ? 'Mã QR đã được xác thực tiếp đón thành công'
-                                  : 'Đưa mã QR này cho nhân viên tiếp đón tại cửa phòng khám',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isCheckedIn
-                                    ? const Color(0xFF0D9488)
-                                    : AppColors.mutedText,
-                                fontWeight: isCheckedIn
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
+                            ] else ...[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFFBEB),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: const Color(0xFFF59E0B),
+                                  ),
+                                ),
+                                child: const Column(
+                                  children: [
+                                    Icon(
+                                      Icons.lock_clock_rounded,
+                                      size: 46,
+                                      color: Color(0xFFD97706),
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      '🔒 CHƯA CẤP MÃ QR CHECK-IN',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        color: Color(0xFF92400E),
+                                      ),
+                                    ),
+                                    SizedBox(height: 6),
+                                    Text(
+                                      'Vui lòng hoàn tất thanh toán Đợt 1: Phí đăng ký khám chuyên khoa (150.000 đ) để nhận Mã QR Check-in và lấy Số thứ tự (STT) vào phòng khám.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        color: Color(0xFF78350F),
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
+                            ],
                           ],
                         ),
                       ),
@@ -426,37 +514,67 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
 
                 // Action simulation button
                 if (!isCheckedIn) ...[
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 50),
-                      backgroundColor: const Color(0xFF0D9488),
+                  if (!_bookingPaid) ...[
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
+                        backgroundColor: const Color(0xFFD97706),
+                      ),
+                      icon: const Icon(Icons.qr_code_2_rounded),
+                      label: const Text(
+                        'Thanh toán Phí khám Đợt 1 (150.000 đ) để nhận QR',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      onPressed: _payBookingFee,
                     ),
-                    icon: _checkingIn
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Icon(Icons.qr_code_scanner_rounded),
-                    label: Text(
-                      _checkingIn
-                          ? 'Đang tiếp đón...'
-                          : 'Mô phỏng Quét Check-in Ngay',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Sau khi thanh toán thành công, Mã QR Check-in sẽ được mở khóa tự động.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.mutedText,
                       ),
                     ),
-                    onPressed: _checkingIn ? null : _checkIn,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Nhấn để mô phỏng quét mã QR tại quầy tiếp đón phòng khám.',
-                    style: TextStyle(fontSize: 12, color: AppColors.mutedText),
-                  ),
+                  ] else ...[
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
+                        backgroundColor: const Color(0xFF0D9488),
+                      ),
+                      icon: _checkingIn
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Icon(Icons.qr_code_scanner_rounded),
+                      label: Text(
+                        _checkingIn
+                            ? 'Đang tiếp đón...'
+                            : 'Mô phỏng Quét Check-in Ngay',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      onPressed: _checkingIn ? null : _checkIn,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Nhấn để mô phỏng quét mã QR tại quầy tiếp đón phòng khám.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.mutedText,
+                      ),
+                    ),
+                  ],
                 ],
 
                 const SizedBox(height: 20),

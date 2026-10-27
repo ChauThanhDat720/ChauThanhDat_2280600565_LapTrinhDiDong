@@ -171,7 +171,30 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   late Appointment _appointment = widget.appointment;
   bool _cancelling = false;
   Invoice? _invoice;
-  bool get _isInvoicePaid => _invoice?.isPaid == true;
+  List<Invoice> _stageInvoices = const [];
+  Invoice? _bookingInvoice;
+  Invoice? _labInvoice;
+  Invoice? _pharmacyInvoice;
+
+  bool get _hasPrescription =>
+      _appointment.prescription != null &&
+      _appointment.prescription!.trim().isNotEmpty;
+
+  bool get _hasLabOrder =>
+      _labInvoice != null ||
+      (_appointment.statusNote != null &&
+          _appointment.statusNote!.contains('Chỉ định CLS:'));
+
+  bool get _isBookingPaid => _bookingInvoice?.isPaid == true;
+  bool get _isLabPaid => _labInvoice?.isPaid == true;
+  bool get _isPharmacyPaid => _pharmacyInvoice?.isPaid == true;
+
+  bool get _isInvoicePaid {
+    if (_hasPrescription) {
+      return _isPharmacyPaid;
+    }
+    return _invoice?.isPaid == true || _isBookingPaid;
+  }
 
   @override
   void initState() {
@@ -183,15 +206,62 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
     try {
       final paymentRepo = LocalPaymentRepository();
       final inv = await paymentRepo.getInvoiceForAppointment(_appointment.id);
-      if (mounted) setState(() => _invoice = inv);
+      final stages =
+          await paymentRepo.getStageInvoicesForAppointment(_appointment.id);
+      final bookingInv = stages
+          .where((i) => i.stage == PaymentStage.booking)
+          .firstOrNull;
+      var labInv = stages
+          .where((i) => i.stage == PaymentStage.lab)
+          .firstOrNull;
+      if (labInv == null &&
+          _appointment.statusNote != null &&
+          _appointment.statusNote!.contains('Chỉ định CLS:')) {
+        final rawNote = _appointment.statusNote!;
+        final idx = rawNote.indexOf('Chỉ định CLS:');
+        final after = rawNote.substring(idx + 'Chỉ định CLS:'.length);
+        final firstLine = after.split('\n').first;
+        final labs = firstLine
+            .split(',')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+        if (labs.isNotEmpty) {
+          labInv = await paymentRepo.createOrUpdateLabInvoice(
+            _appointment.id,
+            labs,
+          );
+        }
+      }
+      var pharmInv = stages
+          .where((i) => i.stage == PaymentStage.pharmacy)
+          .firstOrNull;
+      if (pharmInv == null &&
+          _appointment.status == AppointmentStatus.completed &&
+          _hasPrescription) {
+        pharmInv = await paymentRepo.getOrCreatePharmacyInvoice(
+          _appointment.id,
+        );
+      }
+      final updatedStages =
+          await paymentRepo.getStageInvoicesForAppointment(_appointment.id);
+      final nextInv =
+          await paymentRepo.getInvoiceForAppointment(_appointment.id);
+      if (mounted) {
+        setState(() {
+          _invoice = nextInv ?? inv;
+          _stageInvoices = updatedStages;
+          _bookingInvoice = bookingInv;
+          _labInvoice = labInv;
+          _pharmacyInvoice = pharmInv;
+        });
+      }
     } catch (_) {}
   }
 
-  Future<void> _openPaymentScreen() async {
+  Future<void> _openStagePayment(Invoice invoice) async {
     final nav = Navigator.of(context);
     final paymentRepo = LocalPaymentRepository();
-    final invoice =
-        _invoice ?? await paymentRepo.getInvoiceForAppointment(_appointment.id);
     if (!mounted) return;
     if (invoice.isPaid) {
       await nav.push(
@@ -206,6 +276,13 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
       );
     }
     await _loadInvoice();
+  }
+
+  Future<void> _openPaymentScreen() async {
+    final paymentRepo = LocalPaymentRepository();
+    final invoice =
+        _invoice ?? await paymentRepo.getInvoiceForAppointment(_appointment.id);
+    await _openStagePayment(invoice);
   }
 
   bool get _canCancel =>
@@ -283,6 +360,45 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
           ),
         if (_appointment.cancellationReason?.isNotEmpty == true)
           _line('Lý do hủy', _appointment.cancellationReason!),
+        if (_appointment.status != AppointmentStatus.cancelled) ...[
+          const SizedBox(height: 12),
+          _buildStagedPaymentCard(),
+        ],
+        if (_hasLabOrder &&
+            _appointment.status != AppointmentStatus.completed &&
+            _appointment.status != AppointmentStatus.cancelled) ...[
+          const SizedBox(height: 12),
+          FilledButton.tonalIcon(
+            style: FilledButton.styleFrom(
+              backgroundColor: _isLabPaid
+                  ? const Color(0xFFE0F2FE)
+                  : const Color(0xFFFEF3C7),
+              foregroundColor: _isLabPaid
+                  ? const Color(0xFF0369A1)
+                  : const Color(0xFFB45309),
+            ),
+            icon: Icon(
+              _isLabPaid ? Icons.biotech_rounded : Icons.lock_clock_rounded,
+              size: 20,
+            ),
+            label: Text(
+              _isLabPaid
+                  ? 'Mã QR Phòng Xét nghiệm (CLS-QR:${_appointment.id}) & Kết quả'
+                  : 'Thanh toán Phí Xét nghiệm (Đợt 2) để nhận Mã QR CLS',
+            ),
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => LabResultsDetailScreen(
+                    appointment: _appointment,
+                    requirePayment: true,
+                  ),
+                ),
+              );
+              await _loadInvoice();
+            },
+          ),
+        ],
         // Pre-visit Clinical Intake Section
         if (_appointment.status != AppointmentStatus.cancelled) ...[
           const SizedBox(height: 16),
@@ -843,13 +959,16 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
               color: Color(0xFF0284C7),
             ),
             label: const Text('Xem Kết quả Xét nghiệm & CĐHA'),
-            onPressed: () {
-              Navigator.of(context).push(
+            onPressed: () async {
+              await Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) =>
-                      LabResultsDetailScreen(appointment: _appointment),
+                  builder: (_) => LabResultsDetailScreen(
+                    appointment: _appointment,
+                    requirePayment: true,
+                  ),
                 ),
               );
+              await _loadInvoice();
             },
           ),
           if (_appointment.followUpDate != null) ...[
@@ -969,6 +1088,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                   ),
                 ),
               );
+              await _loadInvoice();
             },
           ),
         ],
@@ -998,6 +1118,164 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
       ],
     ),
   );
+
+  Widget _buildStagedPaymentCard() {
+    final stages = _stageInvoices.isNotEmpty
+        ? _stageInvoices
+        : (_bookingInvoice != null ? [_bookingInvoice!] : const <Invoice>[]);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.35),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.account_balance_wallet_rounded,
+                color: AppColors.primary,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Thanh toán Viện phí theo Giai đoạn (3 Đợt)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Hoàn tất thanh toán từng đợt trước khi nhận mã QR dịch vụ tương ứng.',
+            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 12),
+          for (final inv in stages) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: inv.isPaid
+                    ? const Color(0xFFECFDF5)
+                    : const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: inv.isPaid
+                      ? const Color(0xFF10B981).withValues(alpha: 0.4)
+                      : const Color(0xFFF59E0B),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        inv.isPaid
+                            ? Icons.check_circle_rounded
+                            : Icons.pending_actions_rounded,
+                        size: 18,
+                        color: inv.isPaid
+                            ? const Color(0xFF059669)
+                            : const Color(0xFFD97706),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          inv.stage.title,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: inv.isPaid
+                                ? const Color(0xFF065F46)
+                                : const Color(0xFF92400E),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        Invoice.formatCurrency(inv.patientPayable),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                          color: inv.isPaid
+                              ? const Color(0xFF059669)
+                              : const Color(0xFFD97706),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          inv.isPaid
+                              ? '✅ Đã cấp ${inv.stage.qrServiceTitle}: ${inv.qrServiceCode}'
+                              : '🔒 Thanh toán trước để nhận ${inv.stage.qrServiceTitle}',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: inv.isPaid
+                                ? const Color(0xFF047857)
+                                : const Color(0xFFB45309),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          backgroundColor: inv.isPaid
+                              ? Colors.white
+                              : const Color(0xFFD97706),
+                          foregroundColor: inv.isPaid
+                              ? const Color(0xFF059669)
+                              : Colors.white,
+                        ),
+                        onPressed: () => _openStagePayment(inv),
+                        child: Text(
+                          inv.isPaid ? 'Biên lai' : 'Thanh toán',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _line(String title, String value) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: ListTile(

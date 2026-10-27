@@ -34,6 +34,41 @@ enum PaymentStatus {
   }
 }
 
+enum PaymentStage {
+  booking,
+  lab,
+  pharmacy;
+
+  String get title => switch (this) {
+        booking => 'Đợt 1: Phí Đăng ký Khám chuyên khoa',
+        lab => 'Đợt 2: Phí Xét nghiệm & Cận lâm sàng',
+        pharmacy => 'Đợt 3: Tiền Thuốc (Nhà thuốc BV)',
+      };
+
+  String get shortLabel => switch (this) {
+        booking => 'Đợt 1: Phí Khám',
+        lab => 'Đợt 2: Xét nghiệm CLS',
+        pharmacy => 'Đợt 3: Tiền Thuốc',
+      };
+
+  String get qrServiceTitle => switch (this) {
+        booking => 'Mã QR Check-in Phòng khám',
+        lab => 'Mã QR Thực hiện Xét nghiệm (CLS)',
+        pharmacy => 'Mã QR Nhận thuốc tại Quầy Dược',
+      };
+
+  static PaymentStage fromJson(String? value) {
+    switch (value?.toLowerCase()) {
+      case 'lab':
+        return PaymentStage.lab;
+      case 'pharmacy':
+        return PaymentStage.pharmacy;
+      default:
+        return PaymentStage.booking;
+    }
+  }
+}
+
 class InvoiceItem {
   const InvoiceItem({
     required this.name,
@@ -51,6 +86,7 @@ class InvoiceItem {
   final int unitPrice;
   final String? usageInstructions;
 
+  String get title => name;
   int get totalPrice => quantity * unitPrice;
   String get formattedUnitPrice => Invoice.formatCurrency(unitPrice);
   String get formattedTotalPrice => Invoice.formatCurrency(totalPrice);
@@ -104,6 +140,7 @@ class Invoice {
     this.paidAt,
     this.createdAt,
     this.vietQrUrl,
+    this.stage = PaymentStage.booking,
   });
 
   final String id;
@@ -133,8 +170,16 @@ class Invoice {
   final DateTime? paidAt;
   final DateTime? createdAt;
   final String? vietQrUrl;
+  final PaymentStage stage;
 
   bool get isPaid => paymentStatus == PaymentStatus.paid;
+  int get patientPayable => totalAmount;
+
+  String get qrServiceCode => switch (stage) {
+        PaymentStage.booking => 'CHECKIN:$appointmentId',
+        PaymentStage.lab => 'CLS-QR:$appointmentId',
+        PaymentStage.pharmacy => 'PHARM-QR:$appointmentId',
+      };
 
   String get formattedTotalAmount => formatCurrency(totalAmount);
   String get formattedExaminationFee => formatCurrency(examinationFee);
@@ -327,6 +372,57 @@ class Invoice {
     return result;
   }
 
+  /// Trích xuất tự động bảng kê phí Cận lâm sàng từ danh sách chỉ định của Bác sĩ
+  static List<InvoiceItem> parseLabOrdersToItems(List<String> labs) {
+    final items = <InvoiceItem>[];
+    for (final raw in labs) {
+      final lab = raw.trim();
+      if (lab.isEmpty) continue;
+      final lower = lab.toLowerCase();
+      int price = 95000;
+      String room = 'Phòng Xét nghiệm 102 - Tầng 1';
+      if (lower.contains('cbc') || lower.contains('tế bào máu')) {
+        price = 80000;
+        room = 'Phòng Huyết học 102 - Tầng 1';
+      } else if (lower.contains('ecg') || lower.contains('điện tâm đồ')) {
+        price = 70000;
+        room = 'Phòng Thăm dò chức năng 205 - Tầng 2';
+      } else if (lower.contains('siêu âm')) {
+        price = 180000;
+        room = 'Phòng Siêu âm Doppler 206 - Tầng 2';
+      } else if (lower.contains('x-quang') || lower.contains('cxr')) {
+        price = 120000;
+        room = 'Phòng Chẩn đoán hình ảnh 105 - Tầng 1';
+      } else if (lower.contains('sinh hóa')) {
+        price = 95000;
+        room = 'Phòng Sinh hóa máu 103 - Tầng 1';
+      }
+      items.add(
+        InvoiceItem(
+          name: lab,
+          category: 'Cận lâm sàng',
+          unit: 'Lần',
+          quantity: 1,
+          unitPrice: price,
+          usageInstructions: room,
+        ),
+      );
+    }
+    if (items.isEmpty) {
+      items.add(
+        const InvoiceItem(
+          name: 'Chỉ định Xét nghiệm & Cận lâm sàng tổng quát',
+          category: 'Cận lâm sàng',
+          unit: 'Lần',
+          quantity: 1,
+          unitPrice: 120000,
+          usageInstructions: 'Phòng Xét nghiệm 102 - Tầng 1',
+        ),
+      );
+    }
+    return items;
+  }
+
   String get dynamicVietQrUrl {
     if (vietQrUrl != null && vietQrUrl!.isNotEmpty) return vietQrUrl!;
     final encName = Uri.encodeComponent(bankAccountName);
@@ -368,6 +464,7 @@ class Invoice {
     DateTime? paidAt,
     DateTime? createdAt,
     String? vietQrUrl,
+    PaymentStage? stage,
   }) {
     return Invoice(
       id: id ?? this.id,
@@ -397,6 +494,7 @@ class Invoice {
       paidAt: paidAt ?? this.paidAt,
       createdAt: createdAt ?? this.createdAt,
       vietQrUrl: vietQrUrl ?? this.vietQrUrl,
+      stage: stage ?? this.stage,
     );
   }
 
@@ -433,6 +531,7 @@ class Invoice {
       paidAt: json['paid_at'] != null ? DateTime.tryParse(json['paid_at'].toString()) : null,
       createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
       vietQrUrl: json['viet_qr_url'] as String?,
+      stage: PaymentStage.fromJson(json['stage'] as String?),
     );
   }
 
@@ -464,5 +563,6 @@ class Invoice {
         'paid_at': paidAt?.toIso8601String(),
         'created_at': createdAt?.toIso8601String(),
         'viet_qr_url': vietQrUrl,
+        'stage': stage.name,
       };
 }

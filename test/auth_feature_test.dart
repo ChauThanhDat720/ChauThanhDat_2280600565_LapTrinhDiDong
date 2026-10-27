@@ -5,13 +5,16 @@ import 'package:smart_hospital/core/session/patient_session.dart';
 import 'package:smart_hospital/features/appointments/data/appointment_repository.dart';
 import 'package:smart_hospital/features/appointments/domain/appointment.dart';
 import 'package:smart_hospital/features/appointments/presentation/appointment_list_screen.dart';
+import 'package:smart_hospital/features/appointments/presentation/digital_boarding_pass_screen.dart';
 import 'package:smart_hospital/features/auth/presentation/login_screen.dart';
 import 'package:smart_hospital/features/auth/presentation/role_home.dart';
 import 'package:smart_hospital/features/auth/repositories/auth_repository.dart';
 import 'package:smart_hospital/features/doctors/presentation/doctor_dashboard_screen.dart';
 import 'package:smart_hospital/features/family/data/family_repository.dart';
 import 'package:smart_hospital/features/home/presentation/home_screen.dart';
+import 'package:smart_hospital/features/medical_records/presentation/lab_results_detail_screen.dart';
 import 'package:smart_hospital/features/payments/data/payment_repository.dart';
+import 'package:smart_hospital/features/payments/domain/invoice.dart';
 import 'package:smart_hospital/features/reminders/data/medication_reminder_repository.dart';
 import 'package:smart_hospital/features/teleconsultation/presentation/post_care_chat_screen.dart';
 import 'package:smart_hospital/features/vaccination/data/vaccination_repository.dart';
@@ -370,7 +373,7 @@ void main() {
     });
 
     testWidgets('Unpaid completed appointment gates prescription and post-care chat until paid', (tester) async {
-      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.physicalSize = const Size(800, 2200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
@@ -427,10 +430,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Chưa hoàn tất thanh toán viện phí'), findsOneWidget);
 
-      // Now simulate payment of the invoice
+      // Now simulate payment of the stage invoices (Stage 1 Booking & Stage 3 Pharmacy)
       final paymentRepo = LocalPaymentRepository();
-      final inv = await paymentRepo.getInvoiceForAppointment('APT-GATE-01');
-      await paymentRepo.simulatePayment(inv.id);
+      final stages = await paymentRepo.getStageInvoicesForAppointment('APT-GATE-01');
+      for (final stageInv in stages) {
+        if (!stageInv.isPaid) {
+          await paymentRepo.simulatePayment(stageInv.id);
+        }
+      }
 
       // Re-open AppointmentDetailScreen after payment -> unlocked!
       await tester.pumpWidget(
@@ -447,5 +454,133 @@ void main() {
       expect(find.text('Tạo lịch nhắc uống thuốc từ toa này'), findsOneWidget);
       expect(find.text('Nhắn tin với BS. Trần Thảo Linh'), findsOneWidget);
     });
+
+    testWidgets(
+      '3-Stage Hospital Payment Flow: Stage 1 (Check-in QR), Stage 2 (Lab CLS-QR), Stage 3 (Pharmacy PHARM-QR)',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 1400);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        LocalPaymentRepository.resetForTest();
+        AppointmentStore.instance.clearForTest();
+
+        final paymentRepo = LocalPaymentRepository();
+        const apptRepo = LocalAppointmentRepository();
+
+        // 1. Patient books an appointment -> Stage 1 (Booking Fee 150.000đ) is unpaid
+        final bookedApt = Appointment(
+          id: 'APT-STAGE-01',
+          patientId: 'demo-patient',
+          patientName: 'Nguyễn Văn An',
+          doctorId: 'dr-linh',
+          doctorName: 'BS. Trần Thảo Linh',
+          department: 'Khoa Tim mạch',
+          specialty: 'Tim mạch',
+          date: DateTime.now(),
+          time: '08:30',
+          reason: 'Khám tim mạch định kỳ',
+          status: AppointmentStatus.confirmed,
+        );
+        AppointmentStore.instance.addAppointment(bookedApt);
+
+        final bookingInv = await paymentRepo.getOrCreateBookingInvoice(
+          bookedApt.id,
+        );
+        expect(bookingInv.stage, PaymentStage.booking);
+        expect(bookingInv.patientPayable, 150000);
+        expect(bookingInv.isPaid, isFalse);
+
+        // DigitalBoardingPassScreen locks CHECKIN QR until Stage 1 is paid
+        await tester.pumpWidget(
+          MaterialApp(
+            home: DigitalBoardingPassScreen(
+              appointment: bookedApt,
+              repository: apptRepo,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.textContaining('CHƯA CẤP MÃ QR CHECK-IN'), findsOneWidget);
+        expect(find.text('CHECKIN:APT-STAGE-01'), findsNothing);
+
+        // Pay Stage 1 -> CHECKIN QR unlocked!
+        await paymentRepo.simulatePayment(bookingInv.id);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: DigitalBoardingPassScreen(
+              key: UniqueKey(),
+              appointment: bookedApt,
+              repository: apptRepo,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('CHECKIN:APT-STAGE-01'), findsOneWidget);
+
+        // 2. Doctor orders Lab Tests -> Stage 2 (Lab Fee) created & unpaid
+        final labInv = await paymentRepo.createOrUpdateLabInvoice(
+          bookedApt.id,
+          const ['Tổng phân tích tế bào máu (CBC)', 'Điện tâm đồ (ECG)'],
+        );
+        expect(labInv.stage, PaymentStage.lab);
+        expect(labInv.isPaid, isFalse);
+        expect(labInv.qrServiceCode, 'CLS-QR:APT-STAGE-01');
+
+        // LabResultsDetailScreen with requirePayment: true is locked until Stage 2 is paid
+        await tester.pumpWidget(
+          MaterialApp(
+            home: LabResultsDetailScreen(
+              key: UniqueKey(),
+              appointment: bookedApt,
+              requirePayment: true,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Đợt 2: Chưa thanh toán Phí Xét nghiệm & CLS'),
+          findsOneWidget,
+        );
+
+        // Pay Stage 2 -> CLS-QR & Lab Results unlocked!
+        await paymentRepo.simulatePayment(labInv.id);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: LabResultsDetailScreen(
+              key: UniqueKey(),
+              appointment: bookedApt,
+              requirePayment: true,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('CLS-QR:APT-STAGE-01'),
+          findsOneWidget,
+        );
+
+        // 3. Doctor completes exam & writes prescription -> Stage 3 (Pharmacy Fee) created
+        await apptRepo.updateAppointmentStatus(
+          bookedApt.id,
+          AppointmentStatus.completed,
+          diagnosis: 'Tăng huyết áp độ 1',
+          prescription: '1. Concor 2.5mg - 1 viên/ngày',
+        );
+        final pharmInv = await paymentRepo.getOrCreatePharmacyInvoice(
+          bookedApt.id,
+        );
+        expect(pharmInv, isNotNull);
+        expect(pharmInv!.stage, PaymentStage.pharmacy);
+        expect(pharmInv.isPaid, isFalse);
+        expect(pharmInv.qrServiceCode, 'PHARM-QR:APT-STAGE-01');
+
+        await paymentRepo.simulatePayment(pharmInv.id);
+        expect(
+          await paymentRepo.isStagePaid(bookedApt.id, PaymentStage.pharmacy),
+          isTrue,
+        );
+      },
+    );
   });
 }

@@ -14,6 +14,7 @@ import '../../auth/repositories/auth_repository_provider.dart';
 import '../../medicines/data/medicine_repository.dart';
 import '../../medical_records/presentation/lab_results_detail_screen.dart';
 import '../../vitals/presentation/health_vitals_screen.dart';
+import '../../payments/data/payment_repository.dart';
 import '../../payments/presentation/invoice_management_screen.dart';
 import '../../teleconsultation/presentation/doctor_teleconsultations_screen.dart';
 import '../../teleconsultation/presentation/post_care_chat_screen.dart';
@@ -1339,6 +1340,17 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
         followUpDate: _selectedFollowUpDate,
       );
 
+      final paymentRepo = LocalPaymentRepository();
+      if (_labOrdered && _selectedLabs.isNotEmpty) {
+        await paymentRepo.createOrUpdateLabInvoice(
+          widget.appointment.id,
+          _selectedLabs.toList(),
+        );
+      }
+      if (_prescriptionController.text.trim().isNotEmpty) {
+        await paymentRepo.getOrCreatePharmacyInvoice(widget.appointment.id);
+      }
+
       final fNote = _selectedFollowUpDate != null
           ? ' Bác sĩ có lịch hẹn tái khám ngày ${AppTimezone.date(_selectedFollowUpDate!)}.'
           : '';
@@ -1599,9 +1611,34 @@ class _DoctorExaminationScreenState extends State<DoctorExaminationScreen> {
                   size: 16,
                 ),
                 label: Text(
-                  _labOrdered ? 'Đã có kết quả' : 'Mô phỏng trả kết quả',
+                  _labOrdered
+                      ? 'Đã chỉ định & Tạo phí CLS'
+                      : 'Chỉ định & Tạo phí CLS (Đợt 2)',
                 ),
-                onPressed: () => setState(() => _labOrdered = true),
+                onPressed: () async {
+                  if (_selectedLabs.isEmpty) {
+                    _selectedLabs.add('Tổng phân tích tế bào máu (CBC)');
+                  }
+                  await LocalPaymentRepository().createOrUpdateLabInvoice(
+                    widget.appointment.id,
+                    _selectedLabs.toList(),
+                  );
+                  await widget.repository.updateAppointmentStatus(
+                    widget.appointment.id,
+                    widget.appointment.status,
+                    note: 'Chỉ định CLS: ${_selectedLabs.join(", ")}',
+                  );
+                  if (mounted) {
+                    setState(() => _labOrdered = true);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Đã phát hành Chỉ định CLS & Hóa đơn Đợt 2. Bệnh nhân cần thanh toán phí CLS để nhận Mã QR xét nghiệm!',
+                        ),
+                      ),
+                    );
+                  }
+                },
               ),
             ),
             const SizedBox(height: 8),

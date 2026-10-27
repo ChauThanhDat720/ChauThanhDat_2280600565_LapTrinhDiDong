@@ -154,102 +154,240 @@ class LocalPaymentRepository implements PaymentRepository {
     ]);
   }
 
-  @override
-  Future<Invoice> getInvoiceForAppointment(String appointmentId) async {
+  String _resolvePatientId(Appointment? apt) => apt?.patientId.isNotEmpty == true
+      ? apt!.patientId
+      : (PatientSession.instance.isDemoAccount
+            ? 'BN-01'
+            : PatientSession.instance.patientId);
+
+  String _resolvePatientName(Appointment? apt) =>
+      apt?.patientName.isNotEmpty == true
+      ? apt!.patientName
+      : (PatientSession.instance.email.isNotEmpty
+            ? PatientSession.instance.name
+            : 'Bệnh nhân');
+
+  /// Đợt 1: Hóa đơn Phí Đăng ký Khám chuyên khoa (bắt buộc thanh toán trước khi cấp QR Check-in)
+  Future<Invoice> getOrCreateBookingInvoice(String appointmentId) async {
+    final existing = _invoices
+        .where(
+          (e) =>
+              e.appointmentId == appointmentId &&
+              e.stage == PaymentStage.booking,
+        )
+        .firstOrNull;
+    if (existing != null) return existing;
+
     final apt = AppointmentStore.instance.appointments
         .where((a) => a.id == appointmentId)
         .firstOrNull;
+    const examFee = 150000;
+    final items = [
+      InvoiceItem(
+        name:
+            'Công khám chuyên khoa ${apt?.department.isNotEmpty == true ? apt!.department : "Tim mạch"}',
+        category: 'Khám bệnh',
+        unit: 'Lượt',
+        quantity: 1,
+        unitPrice: examFee,
+        usageInstructions: apt?.doctorName.isNotEmpty == true
+            ? 'Bác sĩ: ${apt!.doctorName}'
+            : null,
+      ),
+    ];
 
-    final foundIdx = _invoices.indexWhere(
-      (e) => e.appointmentId == appointmentId,
+    final newInv = Invoice(
+      id: 'inv-booking-$appointmentId',
+      appointmentId: appointmentId,
+      patientId: _resolvePatientId(apt),
+      patientName: _resolvePatientName(apt),
+      doctorId: apt?.doctorId,
+      doctorName: apt?.doctorName ?? 'BS. Trần Thảo Linh',
+      department: apt?.department ?? 'Khoa Tim mạch',
+      invoiceCode: 'HD-KHAM-${_invoices.length + 101}',
+      examinationFee: examFee,
+      medicineFee: 0,
+      otherFee: 0,
+      totalAmount: examFee,
+      items: items,
+      paymentStatus: PaymentStatus.unpaid,
+      paymentRef:
+          'KHAM${appointmentId.replaceAll(RegExp(r'[^0-9A-Za-z]'), '')}_DAT',
+      createdAt: DateTime.now(),
+      stage: PaymentStage.booking,
     );
-    if (foundIdx >= 0) {
-      final existing = _invoices[foundIdx];
-      if (!existing.isPaid &&
-          existing.medicineFee == 0 &&
-          apt?.prescription != null &&
-          apt!.prescription!.trim().isNotEmpty) {
-        final parsedMeds = Invoice.parsePrescriptionToItems(apt.prescription!);
-        final medFee = parsedMeds.fold(0, (sum, i) => sum + i.totalPrice);
-        final updatedItems = [...existing.items, ...parsedMeds];
+    _invoices.insert(0, newInv);
+    return newInv;
+  }
+
+  /// Đợt 2: Hóa đơn Phí Xét nghiệm & Cận lâm sàng (bắt buộc thanh toán trước khi cấp QR lấy mẫu CLS)
+  Future<Invoice> createOrUpdateLabInvoice(
+    String appointmentId,
+    List<String> labNames,
+  ) async {
+    final apt = AppointmentStore.instance.appointments
+        .where((a) => a.id == appointmentId)
+        .firstOrNull;
+    final labItems = Invoice.parseLabOrdersToItems(labNames);
+    final labTotal = labItems.fold<int>(0, (sum, i) => sum + i.totalPrice);
+
+    final existingIdx = _invoices.indexWhere(
+      (e) => e.appointmentId == appointmentId && e.stage == PaymentStage.lab,
+    );
+    if (existingIdx >= 0) {
+      final current = _invoices[existingIdx];
+      if (current.isPaid) return current;
+      final updated = current.copyWith(
+        otherFee: labTotal,
+        totalAmount: labTotal,
+        items: labItems,
+      );
+      _invoices[existingIdx] = updated;
+      return updated;
+    }
+
+    final newInv = Invoice(
+      id: 'inv-lab-$appointmentId',
+      appointmentId: appointmentId,
+      patientId: _resolvePatientId(apt),
+      patientName: _resolvePatientName(apt),
+      doctorId: apt?.doctorId,
+      doctorName: apt?.doctorName ?? 'BS. Trần Thảo Linh',
+      department: apt?.department ?? 'Khoa Tim mạch',
+      invoiceCode: 'HD-CLS-${_invoices.length + 101}',
+      examinationFee: 0,
+      medicineFee: 0,
+      otherFee: labTotal,
+      totalAmount: labTotal,
+      items: labItems,
+      paymentStatus: PaymentStatus.unpaid,
+      paymentRef:
+          'CLS${appointmentId.replaceAll(RegExp(r'[^0-9A-Za-z]'), '')}_DAT',
+      createdAt: DateTime.now(),
+      stage: PaymentStage.lab,
+    );
+    _invoices.insert(0, newInv);
+    return newInv;
+  }
+
+  Future<Invoice?> getLabInvoice(String appointmentId) async {
+    final existing = _invoices
+        .where(
+          (e) =>
+              e.appointmentId == appointmentId && e.stage == PaymentStage.lab,
+        )
+        .firstOrNull;
+    if (existing != null) return existing;
+
+    final apt = AppointmentStore.instance.appointments
+        .where((a) => a.id == appointmentId)
+        .firstOrNull;
+    final note = apt?.statusNote ?? '';
+    if (note.contains('Chỉ định CLS:') || note.contains('Kết quả CLS:')) {
+      final match = RegExp(
+        r'(?:Chỉ định CLS:|Kết quả CLS:)\s*([^\(\n]+)',
+      ).firstMatch(note);
+      final rawLabs = match != null
+          ? match
+                .group(1)!
+                .split(',')
+                .map((s) => s.trim())
+                .where((s) => s.isNotEmpty)
+                .toList()
+          : <String>['Tổng phân tích tế bào máu (CBC)', 'Điện tâm đồ ECG'];
+      return createOrUpdateLabInvoice(appointmentId, rawLabs);
+    }
+    return null;
+  }
+
+  /// Đợt 3: Hóa đơn Tiền Thuốc theo đơn Bác sĩ kê
+  Future<Invoice?> getOrCreatePharmacyInvoice(String appointmentId) async {
+    final apt = AppointmentStore.instance.appointments
+        .where((a) => a.id == appointmentId)
+        .firstOrNull;
+    if (apt?.prescription == null || apt!.prescription!.trim().isEmpty) {
+      return null;
+    }
+
+    final existingIdx = _invoices.indexWhere(
+      (e) =>
+          e.appointmentId == appointmentId && e.stage == PaymentStage.pharmacy,
+    );
+    final medItems = Invoice.parsePrescriptionToItems(apt.prescription!);
+    final medFee = medItems.fold<int>(0, (sum, i) => sum + i.totalPrice);
+
+    if (existingIdx >= 0) {
+      final existing = _invoices[existingIdx];
+      if (!existing.isPaid && existing.totalAmount != medFee) {
         final updated = existing.copyWith(
           medicineFee: medFee,
-          totalAmount: existing.examinationFee + medFee + existing.otherFee,
-          items: updatedItems,
+          totalAmount: medFee,
+          items: medItems,
         );
-        _invoices[foundIdx] = updated;
+        _invoices[existingIdx] = updated;
         return updated;
       }
       return existing;
     }
 
-    final items = <InvoiceItem>[];
-    const examFee = 150000;
-    items.add(
-      InvoiceItem(
-        name: 'Công khám chuyên khoa ${apt?.department.isNotEmpty == true ? apt!.department : "Tim mạch"}',
-        category: 'Khám bệnh',
-        unit: 'Lượt',
-        quantity: 1,
-        unitPrice: examFee,
-        usageInstructions: apt?.doctorName.isNotEmpty == true ? 'Bác sĩ: ${apt!.doctorName}' : null,
-      ),
-    );
-
-    int medicineFee = 0;
-    if (apt?.prescription != null && apt!.prescription!.trim().isNotEmpty) {
-      final parsedMeds = Invoice.parsePrescriptionToItems(apt.prescription!);
-      items.addAll(parsedMeds);
-      medicineFee = parsedMeds.fold(0, (sum, i) => sum + i.totalPrice);
-    }
-
-    int otherFee = 0;
-    if (apt?.statusNote != null && apt!.statusNote!.contains('Kết quả CLS:')) {
-      otherFee = 65000;
-      items.add(
-        const InvoiceItem(
-          name: 'Chỉ định Cận lâm sàng (Điện tâm đồ ECG / Xét nghiệm máu)',
-          category: 'Cận lâm sàng',
-          unit: 'Lần',
-          quantity: 1,
-          unitPrice: 65000,
-        ),
-      );
-    }
-
-    final totalAmount = examFee + medicineFee + otherFee;
-    final resolvedPatientId = apt?.patientId.isNotEmpty == true
-        ? apt!.patientId
-        : (PatientSession.instance.isDemoAccount
-              ? 'BN-01'
-              : PatientSession.instance.patientId);
-    final resolvedPatientName = apt?.patientName.isNotEmpty == true
-        ? apt!.patientName
-        : (PatientSession.instance.email.isNotEmpty
-              ? PatientSession.instance.name
-              : 'Bệnh nhân');
-
-    // Tự sinh hóa đơn mới cho lịch hẹn với đầy đủ bảng kê thuốc & dịch vụ
     final newInv = Invoice(
-      id: 'inv-${DateTime.now().millisecondsSinceEpoch}',
+      id: 'inv-pharm-$appointmentId',
       appointmentId: appointmentId,
-      patientId: resolvedPatientId,
-      patientName: resolvedPatientName,
-      doctorId: apt?.doctorId,
-      doctorName: apt?.doctorName ?? 'BS. Trần Thảo Linh',
-      department: apt?.department ?? 'Khoa Tim mạch',
-      invoiceCode: 'HD261025-${_invoices.length + 100}',
-      examinationFee: examFee,
-      medicineFee: medicineFee,
-      otherFee: otherFee,
-      totalAmount: totalAmount,
-      items: items,
+      patientId: _resolvePatientId(apt),
+      patientName: _resolvePatientName(apt),
+      doctorId: apt.doctorId,
+      doctorName: apt.doctorName,
+      department: apt.department,
+      invoiceCode: 'HD-THUOC-${_invoices.length + 101}',
+      examinationFee: 0,
+      medicineFee: medFee,
+      otherFee: 0,
+      totalAmount: medFee,
+      items: medItems,
       paymentStatus: PaymentStatus.unpaid,
-      paymentRef: 'VP${appointmentId.replaceAll(RegExp(r'[^0-9]'), '')}_DAT',
+      paymentRef:
+          'THUOC${appointmentId.replaceAll(RegExp(r'[^0-9A-Za-z]'), '')}_DAT',
       createdAt: DateTime.now(),
+      stage: PaymentStage.pharmacy,
     );
     _invoices.insert(0, newInv);
     return newInv;
+  }
+
+  /// Danh sách tất cả hóa đơn theo 3 giai đoạn của lịch hẹn
+  Future<List<Invoice>> getStageInvoicesForAppointment(
+    String appointmentId,
+  ) async {
+    final booking = await getOrCreateBookingInvoice(appointmentId);
+    final lab = await getLabInvoice(appointmentId);
+    final pharmacy = await getOrCreatePharmacyInvoice(appointmentId);
+    return [booking, if (lab != null) lab, if (pharmacy != null) pharmacy];
+  }
+
+  /// Kiểm tra một giai đoạn cụ thể của lịch khám đã được thanh toán chưa
+  Future<bool> isStagePaid(String appointmentId, PaymentStage stage) async {
+    final stages = await getStageInvoicesForAppointment(appointmentId);
+    final match = stages.where((e) => e.stage == stage).firstOrNull;
+    if (match != null && match.isPaid) return true;
+
+    // Tương thích ngược nếu có hóa đơn tổng hợp đã thanh toán cho ca khám này
+    final anyCombinedPaid = _invoices.any(
+      (e) =>
+          e.appointmentId == appointmentId &&
+          e.isPaid &&
+          ((stage == PaymentStage.booking && e.examinationFee > 0) ||
+              (stage == PaymentStage.lab && e.otherFee > 0) ||
+              (stage == PaymentStage.pharmacy && e.medicineFee > 0)),
+    );
+    return anyCombinedPaid;
+  }
+
+  @override
+  Future<Invoice> getInvoiceForAppointment(String appointmentId) async {
+    final stages = await getStageInvoicesForAppointment(appointmentId);
+    final unpaidStage = stages.where((e) => !e.isPaid).firstOrNull;
+    if (unpaidStage != null) return unpaidStage;
+    return stages.last;
   }
 
   @override
