@@ -30,6 +30,7 @@ class _VietQrPaymentScreenState extends State<VietQrPaymentScreen> {
   late Invoice _invoice;
   bool _isProcessing = false;
   bool _useMicroPaymentForTest = false; // Chế độ test 2.000đ tiền thật
+  bool _useVectorQr = false; // Chế độ hiển thị QR Vector EMVCo siêu nét
   Timer? _countdownTimer;
   int _secondsRemaining = 15 * 60; // 15 phút đếm ngược
 
@@ -111,12 +112,7 @@ class _VietQrPaymentScreenState extends State<VietQrPaymentScreen> {
         if (updated.isPaid) {
           _showPaidSuccessDialog(updated);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Hệ thống đang chờ ngân hàng gửi xác nhận giao dịch...'),
-              backgroundColor: Color(0xFFD97706),
-            ),
-          );
+          _showConfirmRealTransferDialog();
         }
       }
     } catch (e) {
@@ -127,6 +123,108 @@ class _VietQrPaymentScreenState extends State<VietQrPaymentScreen> {
         );
       }
     }
+  }
+
+  void _showConfirmRealTransferDialog() {
+    final txCtrl = TextEditingController(
+      text: 'FT${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.verified_user_rounded, color: AppColors.primary, size: 26),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Xác nhận chuyển khoản tiền thật',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Bạn đã quét mã VietQR và chuyển tiền vào tài khoản thụ hưởng:',
+              style: TextStyle(fontSize: 13.5, color: Color(0xFF334155)),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF93C5FD)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Ngân hàng: ${BankAccountConfigStore.instance.currentBank.fullName}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Số tài khoản: ${_invoice.bankAccountNumber}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                      color: Color(0xFF1D4ED8),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Chủ tài khoản: ${_invoice.bankAccountName}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Số tiền: ${Invoice.formatCurrency(_currentAmount)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13.5,
+                      color: Color(0xFF16A34A),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: txCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Mã giao dịch ngân hàng (FT / Tùy chọn)',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Chưa chuyển'),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF16A34A),
+            ),
+            icon: const Icon(Icons.check_circle_rounded, size: 18),
+            label: const Text('Tôi đã chuyển tiền thành công'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _simulatePayment();
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _simulatePayment() async {
@@ -638,36 +736,63 @@ class _VietQrPaymentScreenState extends State<VietQrPaymentScreen> {
 
                   // Mã QR hiển thị
                   Container(
-                    width: 230,
-                    height: 230,
+                    width: 240,
+                    height: 240,
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
                     ),
-                    child: Image.network(
-                      _currentQrUrl,
-                      fit: BoxFit.contain,
-                      loadingBuilder: (ctx, child, progress) {
-                        if (progress == null) return child;
-                        return const Center(
-                          child: CircularProgressIndicator(),
-                        );
-                      },
-                      errorBuilder: (ctx, err, stack) {
-                        // Fallback vẽ vector QR nếu không tải được ảnh
-                        return Center(
-                          child: _VietQrCanvasView(
-                            data: _currentEmvcoString,
-                            size: 200,
+                    child: _useVectorQr
+                        ? Center(
+                            child: _VietQrCanvasView(
+                              data: _currentEmvcoString,
+                              size: 210,
+                            ),
+                          )
+                        : Image.network(
+                            _currentQrUrl,
+                            fit: BoxFit.contain,
+                            loadingBuilder: (ctx, child, progress) {
+                              if (progress == null) return child;
+                              return const Center(
+                                child: CircularProgressIndicator(),
+                              );
+                            },
+                            errorBuilder: (ctx, err, stack) {
+                              // Fallback vẽ vector QR nếu không tải được ảnh
+                              return Center(
+                                child: _VietQrCanvasView(
+                                  data: _currentEmvcoString,
+                                  size: 210,
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() => _useVectorQr = !_useVectorQr);
+                    },
+                    icon: Icon(
+                      _useVectorQr ? Icons.image_outlined : Icons.qr_code_2_rounded,
+                      size: 16,
+                    ),
+                    label: Text(
+                      _useVectorQr
+                          ? 'Đang hiện QR Vector EMVCo siêu nét (Nhấn để xem khung ảnh VietQR)'
+                          : 'Khó quét trên màn hình? Chuyển sang QR Vector EMVCo siêu nét',
+                      style: const TextStyle(fontSize: 11.5),
+                    ),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -1310,7 +1435,13 @@ class _VietQrCanvasPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = const Color(0xFF0F172A);
+    final bgPaint = Paint()..color = Colors.white;
+    canvas.drawRect(Offset.zero & size, bgPaint);
+
+    final paint = Paint()
+      ..color = Colors.black
+      ..isAntiAlias = false
+      ..style = PaintingStyle.fill;
     final moduleSize = size.width / image.moduleCount;
 
     for (int x = 0; x < image.moduleCount; x++) {
@@ -1319,8 +1450,8 @@ class _VietQrCanvasPainter extends CustomPainter {
           final rect = Rect.fromLTWH(
             x * moduleSize,
             y * moduleSize,
-            moduleSize,
-            moduleSize,
+            moduleSize + 0.35,
+            moduleSize + 0.35,
           );
           canvas.drawRect(rect, paint);
         }
