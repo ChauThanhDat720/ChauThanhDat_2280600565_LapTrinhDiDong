@@ -1,3 +1,7 @@
+import '../../ai_triage/presentation/ai_voice_triage_screen.dart';
+import '../../patient_tracking/presentation/patient_tracking_screen.dart';
+import '../../tools/realtime_translation/realtime_translation_screen.dart';
+import '../../tools/speech/speech_screen.dart';
 import '../../../core/repositories/application_backend.dart';
 
 import 'package:flutter/material.dart';
@@ -55,6 +59,170 @@ class PatientHomeScreen extends StatefulWidget {
 
 class _PatientHomeScreenState extends State<PatientHomeScreen> {
   int _index = 0;
+
+
+  Widget _buildSmartAiSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.auto_awesome, color: Color(0xFF0D9488), size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Công nghệ Thông minh (AI & Sensors)',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFF0F766E),
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D9488).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'ĐIỂM NỔI BẬT',
+                style: TextStyle(
+                  color: Color(0xFF0D9488),
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Featured Card 1: Bác sĩ AI Phân loại triệu chứng bằng giọng nói
+        GestureDetector(
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const AiVoiceTriageScreen()),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0F766E), Color(0xFF0D9488)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0D9488).withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.mic_none_rounded, color: Colors.white, size: 28),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            'Bác Sĩ AI - Đánh Giá Bằng Giọng Nói',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Nói triệu chứng tiếng Việt -> AI phân loại khẩn cấp & gợi ý chuyên khoa tức thì',
+                        style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.3),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Grid 4 Smart Features Cards
+        GridView.count(
+          crossAxisCount: MediaQuery.sizeOf(context).width > 600 ? 4 : 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 1.35,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            // 1. Camera AI Pose Detection
+            _SmartFeatureCard(
+              title: 'Camera AI Dáng đi & Ngã',
+              subtitle: 'Google ML Kit Pose Detection',
+              badge: 'VISION AI',
+              badgeColor: const Color(0xFF8B5CF6),
+              icon: Icons.accessibility_new_rounded,
+              iconColor: const Color(0xFF8B5CF6),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PatientTrackingScreen()),
+              ),
+            ),
+            // 2. Camera OCR Scanner
+            _SmartFeatureCard(
+              title: 'Camera Quét Đơn Thuốc',
+              subtitle: 'Nhận diện chữ OCR quang học',
+              badge: 'ML OCR',
+              badgeColor: const Color(0xFF0284C7),
+              icon: Icons.document_scanner_rounded,
+              iconColor: const Color(0xFF0284C7),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const OcrScreen()),
+              ),
+            ),
+            // 3. Live ECG Telemetry
+            _SmartFeatureCard(
+              title: 'Monitor Sóng Tim ECG',
+              subtitle: 'Theo dõi sinh tồn Real-time',
+              badge: 'REAL-TIME IOT',
+              badgeColor: const Color(0xFFEF4444),
+              icon: Icons.monitor_heart_rounded,
+              iconColor: const Color(0xFFEF4444),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const HealthVitalsScreen()),
+              ),
+            ),
+            // 4. Live Camera Translation
+            _SmartFeatureCard(
+              title: 'Dịch Nhãn Thuốc Live',
+              subtitle: 'Dịch tức thời qua Camera stream',
+              badge: 'CAMERA ML',
+              badgeColor: const Color(0xFF10B981),
+              icon: Icons.camera_alt_rounded,
+              iconColor: const Color(0xFF10B981),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const RealtimeTranslationScreen()),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -323,8 +491,10 @@ class _HomeTabState extends State<_HomeTab> {
                   ),
                   const SizedBox(height: 20),
                   const FamilySelectorBar(),
-                  const SizedBox(height: 28),
-                  const SectionTitle(title: 'Tiện ích nhanh'),
+                  const SizedBox(height: 24),
+                  _buildSmartAiSection(context),
+                  const SizedBox(height: 24),
+                  const SectionTitle(title: 'Tiện ích bệnh viện'),
                   const SizedBox(height: 14),
                   GridView.count(
                     crossAxisCount: MediaQuery.sizeOf(context).width > 600
@@ -1450,4 +1620,89 @@ class _Action extends StatelessWidget {
       ),
     ),
   );
+class _SmartFeatureCard extends StatelessWidget {
+  const _SmartFeatureCard({
+    required this.title,
+    required this.subtitle,
+    required this.badge,
+    required this.badgeColor,
+    required this.icon,
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final String badge;
+  final Color badgeColor;
+  final IconData icon;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: badgeColor.withOpacity(0.35)),
+          boxShadow: [
+            BoxShadow(
+              color: badgeColor.withOpacity(0.06),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: iconColor, size: 22),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    badge,
+                    style: TextStyle(
+                      color: badgeColor,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: AppColors.mutedText, fontSize: 10),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
