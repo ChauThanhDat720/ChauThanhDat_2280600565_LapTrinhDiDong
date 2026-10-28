@@ -1,4 +1,7 @@
 import 'dart:async';
+import '../../../core/realtime/hospital_realtime_service.dart';
+import '../../../core/realtime/realtime_events.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr/qr.dart';
@@ -32,6 +35,7 @@ class _VietQrPaymentScreenState extends State<VietQrPaymentScreen> {
   bool _useMicroPaymentForTest = false; // Chế độ test 2.000đ tiền thật
   bool _useVectorQr = false; // Chế độ hiển thị QR Vector EMVCo siêu nét
   Timer? _countdownTimer;
+  StreamSubscription<RealtimePaymentEvent>? _paymentRealtimeSub;
   int _secondsRemaining = 15 * 60; // 15 phút đếm ngược
 
   @override
@@ -42,6 +46,26 @@ class _VietQrPaymentScreenState extends State<VietQrPaymentScreen> {
     BankAccountConfigStore.instance.addListener(_onBankConfigChanged);
     BankAccountConfigStore.instance.load().then((_) {
       if (mounted) _onBankConfigChanged();
+    });
+
+    _paymentRealtimeSub = HospitalRealtimeService.instance.paymentStream.listen((event) {
+      if (event.invoiceId == _invoice.id || event.invoiceCode == _invoice.invoiceCode || event.appointmentId == _invoice.appointmentId) {
+        if (mounted) {
+          _paymentRealtimeSub?.cancel();
+    _countdownTimer?.cancel();
+          final updated = _invoice.copyWith(
+            paymentStatus: PaymentStatus.paid,
+            bankTransactionId: event.bankTransactionId,
+            paidAmount: event.amount,
+            paidAt: DateTime.now(),
+          );
+          setState(() {
+            _invoice = updated;
+            _isProcessing = false;
+          });
+          _showPaidSuccessDialog(updated);
+        }
+      }
     });
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {

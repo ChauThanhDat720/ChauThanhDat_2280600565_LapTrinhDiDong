@@ -1,3 +1,5 @@
+import 'dart:async';
+import '../../../core/realtime/hospital_realtime_service.dart';
 import '../../../core/repositories/application_backend.dart';
 
 import 'package:flutter/material.dart';
@@ -35,6 +37,10 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadAppointments();
+    AppointmentStore.instance.addListener(_loadAppointments);
+    _queueSub = HospitalRealtimeService.instance.queueStream.listen((_) {
+      if (mounted) _loadAppointments();
+    });
   }
 
   @override

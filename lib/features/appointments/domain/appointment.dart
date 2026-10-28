@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/storage/local_json_storage.dart';
 import '../../../core/utils/app_timezone.dart';
 
 enum AppointmentStatus {
@@ -245,15 +246,49 @@ class Appointment {
 
 /// Compatibility store retained for Phase 2 screens while repositories migrate.
 class AppointmentStore extends ChangeNotifier {
-  AppointmentStore._();
+  AppointmentStore._() {
+    init();
+  }
   static final instance = AppointmentStore._();
   final List<Appointment> _appointments = [];
   List<Appointment> get appointments => List.unmodifiable(_appointments);
   List<Appointment> getAppointments() => appointments;
 
+  static const _storageKey = 'local_stored_appointments_v1';
+  bool _initialized = false;
+
+  Future<void> init() async {
+    if (_initialized) return;
+    _initialized = true;
+    try {
+      final data = await LocalJsonStorage.read(_storageKey);
+      if (data != null && data.isNotEmpty) {
+        for (final item in data) {
+          final apt = Appointment.fromJson(item);
+          if (!_appointments.any((a) => a.id == apt.id)) {
+            _appointments.add(apt);
+          }
+        }
+        _appointments.sort((a, b) => a.startTime.compareTo(b.startTime));
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  void _persist() {
+    try {
+      LocalJsonStorage.write(
+        _storageKey,
+        _appointments.map((a) => a.toJson()).toList(),
+      );
+    } catch (_) {}
+  }
+
   void addAppointment(Appointment appointment) {
+    _appointments.removeWhere((item) => item.id == appointment.id);
     _appointments.add(appointment);
     _appointments.sort((a, b) => a.startTime.compareTo(b.startTime));
+    _persist();
     notifyListeners();
   }
 
@@ -265,18 +300,24 @@ class AppointmentStore extends ChangeNotifier {
       cancelledAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
+    _persist();
     notifyListeners();
   }
 
   void replaceAppointment(Appointment appointment) {
     final index = _appointments.indexWhere((item) => item.id == appointment.id);
-    if (index < 0) return;
-    _appointments[index] = appointment;
+    if (index < 0) {
+      _appointments.add(appointment);
+    } else {
+      _appointments[index] = appointment;
+    }
+    _persist();
     notifyListeners();
   }
 
   void clearForTest() {
     _appointments.clear();
+    _initialized = false;
     notifyListeners();
   }
 }

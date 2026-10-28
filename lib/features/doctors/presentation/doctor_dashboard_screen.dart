@@ -1,3 +1,6 @@
+import '../../../core/realtime/realtime_events.dart';
+import 'dart:async';
+import '../../../core/realtime/hospital_realtime_service.dart';
 import '../../../core/repositories/application_backend.dart';
 import '../../notifications/data/notification_store.dart';
 import '../../notifications/domain/notification_item.dart';
@@ -47,6 +50,8 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   bool _loading = false;
   List<Appointment> _appointments = [];
   AppointmentStatus? _filterStatus;
+  StreamSubscription? _queueRealtimeSub;
+  RealtimeQueueEvent? _latestNewBooking;
   late String _selectedDoctorId = widget.doctorId;
   late String _selectedDoctorName = widget.doctorName;
   late String _selectedDepartment = widget.department;
@@ -56,33 +61,48 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     super.initState();
     AppointmentStore.instance.addListener(_onStoreChanged);
     _loadData();
+    AppointmentStore.instance.addListener(_loadData);
+    _queueRealtimeSub = HospitalRealtimeService.instance.queueStream.listen((event) {
+      if (mounted) {
+        _loadData();
+        if (event.type == RealtimeEventType.appointmentCreated &&
+            (event.doctorId == widget.doctorId ||
+             event.doctorId == _selectedDoctorId ||
+             _selectedDoctorId == 'all')) {
+          setState(() {
+            _latestNewBooking = event;
+          });
+          _showNewAppointmentAlert(event);
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
     AppointmentStore.instance.removeListener(_onStoreChanged);
+    _queueRealtimeSub?.cancel();
+    AppointmentStore.instance.removeListener(_loadData);
     super.dispose();
   }
 
   void _onStoreChanged() {
-    if (mounted && !_loading) {
-      setState(() {
-        final storeItems = AppointmentStore.instance.appointments;
-        for (int i = 0; i < _appointments.length; i++) {
-          final match = storeItems
-              .where((a) => a.id == _appointments[i].id)
-              .firstOrNull;
-          if (match != null) {
-            _appointments[i] = match;
-          }
-        }
-      });
+    if (mounted) {
+      widget.repository
+          .getDoctorAppointments(
+            doctorId: _selectedDoctorId == 'all' ? null : _selectedDoctorId,
+          )
+          .then((items) {
+            if (mounted) setState(() => _appointments = items);
+          })
+          .catchError((_) {});
     }
   }
 
   Future<void> _loadData() async {
     setState(() => _loading = true);
     try {
+      await AppointmentStore.instance.init();
       final items = await widget.repository.getDoctorAppointments(
         doctorId: _selectedDoctorId == 'all' ? null : _selectedDoctorId,
       );
@@ -334,6 +354,43 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     }
   }
 
+
+  void _showNewAppointmentAlert(RealtimeQueueEvent event) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF0F766E),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 5),
+        content: Row(
+          children: [
+            const Icon(Icons.notifications_active_rounded, color: Colors.amberAccent, size: 28),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '🔔 BỆNH NHÂN ĐẶT LỊCH MỚI: ${event.patientName}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Colors.white),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    event.note ?? 'Đã nhận ca khám mới vào danh sách',
+                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filtered = _filterStatus == null
@@ -410,6 +467,50 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_latestNewBooking != null) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE6FFFA),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF38B2AC), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF38B2AC).withOpacity(0.15),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.flash_on_rounded, color: Color(0xFF0D9488), size: 26),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'VỪA NHẬN ĐƠN KHÁM TỪ ${_latestNewBooking!.patientName.toUpperCase()}',
+                              style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF0F766E), fontSize: 13),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _latestNewBooking!.note ?? 'Đơn khám đã xuất hiện ngay trên danh sách của bạn',
+                              style: const TextStyle(fontSize: 12, color: Color(0xFF285E61)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 18, color: Color(0xFF0F766E)),
+                        onPressed: () => setState(() => _latestNewBooking = null),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               // Header Card
               Container(
                 padding: const EdgeInsets.all(16),
@@ -658,6 +759,14 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                                 ),
                                 label: const Text('Gọi vào khám'),
                                 onPressed: () async {
+                                  HospitalRealtimeService.instance.notifyQueueCalled(
+                                    appointmentId: nextPatient.id,
+                                    doctorId: widget.doctorId,
+                                    doctorName: widget.doctorName,
+                                    patientName: nextPatient.patientName,
+                                    queueNumber: nextPatient.queueNumber ?? 1,
+                                    roomNumber: nextPatient.roomNumber ?? 'Phòng 204',
+                                  );
                                   NotificationStore.instance.addNotification(
                                     title: 'Mời vào phòng khám',
                                     body:

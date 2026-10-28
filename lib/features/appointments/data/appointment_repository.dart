@@ -1,3 +1,4 @@
+import '../../../core/realtime/hospital_realtime_service.dart';
 import '../../../core/session/patient_session.dart';
 import '../../../core/utils/app_timezone.dart';
 import '../../../core/network/api_client.dart';
@@ -164,6 +165,7 @@ class LocalAppointmentRepository implements AppointmentRepository {
           parentAppointmentId: appointment.parentAppointmentId,
         );
         AppointmentStore.instance.addAppointment(saved);
+        HospitalRealtimeService.instance.notifyAppointmentCreated(saved);
         return saved;
       });
 
@@ -364,6 +366,7 @@ class RemoteAppointmentRepository implements AppointmentRepository {
           as Map<String, dynamic>,
     );
     AppointmentStore.instance.addAppointment(created);
+    HospitalRealtimeService.instance.notifyAppointmentCreated(created);
     return created;
   }
 

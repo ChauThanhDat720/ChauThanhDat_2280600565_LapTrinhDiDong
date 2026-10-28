@@ -15,6 +15,16 @@ import { handler as vaccinationsHandler } from './src/handlers/vaccinations.js';
 
 const PORT = process.env.PORT || 3000;
 
+const sseClients = new Set();
+export const broadcastRealtimeEvent = (category, payload) => {
+  const message = 'data: ' + JSON.stringify({ category, payload, timestamp: new Date().toISOString() }) + '
+
+';
+  for (const client of sseClients) {
+    try { client.write(message); } catch (_) { sseClients.delete(client); }
+  }
+};
+
 const parseBody = (req) =>
   new Promise((resolve) => {
     let body = '';
@@ -69,8 +79,26 @@ const server = http.createServer(async (req, res) => {
   };
 
   let result;
-  try {
-    if (pathname === '/health' && method === 'GET') {
+    try {
+    if (pathname === '/api/realtime/stream' && method === 'GET') {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+      });
+      res.write('data: ' + JSON.stringify({ category: 'connected', timestamp: new Date().toISOString() }) + '
+
+');
+      sseClients.add(res);
+      req.on('close', () => sseClients.delete(res));
+      return;
+    } else if (pathname === '/api/realtime/broadcast' && method === 'POST') {
+      let payload = {};
+      try { payload = JSON.parse(rawBody || '{}'); } catch (_) {}
+      broadcastRealtimeEvent(payload.category || 'system', payload.payload || payload);
+      result = { statusCode: 200, body: JSON.stringify({ ok: true, activeClients: sseClients.size }) };
+    } else if (pathname === '/health' && method === 'GET') {
       result = await healthHandler(event);
     } else if (pathname === '/departments' && method === 'GET') {
       result = await departmentsHandler(event);
@@ -119,6 +147,26 @@ const server = http.createServer(async (req, res) => {
           event.pathParameters = { id: detailMatch[1] };
         }
         result = await appointmentsHandler(event);
+        if (method === 'POST' && pathname === '/appointments' && result && (result.statusCode === 201 || result.statusCode === 200)) {
+          try {
+            const created = JSON.parse(result.body);
+            broadcastRealtimeEvent('appointment_created', {
+              appointment: created,
+              event: {
+                type: 'appointmentCreated',
+                appointmentId: created.id,
+                doctorId: created.doctorId,
+                doctorName: created.doctorName,
+                patientName: created.patientName,
+                queueNumber: created.queueNumber || 1,
+                roomNumber: created.roomNumber || ('Phòng khám ' + (created.specialty || '')),
+                status: created.status,
+                note: 'Lịch khám lúc ' + created.time + ' ngày ' + created.date + ' (Lý do: ' + (created.reason || '') + ')',
+                timestamp: new Date().toISOString(),
+              },
+            });
+          } catch (_) {}
+        }
       }
     } else if (pathname === '/invoices' || pathname.startsWith('/invoices/')) {
       const match = pathname.match(/^\/invoices\/([^/]+)$/);

@@ -1,3 +1,4 @@
+import '../../../core/realtime/hospital_realtime_service.dart';
 import '../../../core/config/aws_config.dart';
 import '../../../core/repositories/application_backend.dart';
 
@@ -448,6 +449,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
           parentAppointmentId: widget.parentAppointmentId,
         ),
       );
+      HospitalRealtimeService.instance.notifyAppointmentCreated(appointment);
       if (!mounted) return;
       await Navigator.of(context).pushReplacement(
         MaterialPageRoute(

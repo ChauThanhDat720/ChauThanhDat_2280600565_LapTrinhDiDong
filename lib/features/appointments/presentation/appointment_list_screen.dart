@@ -1,3 +1,5 @@
+import 'dart:async';
+import '../../../core/realtime/hospital_realtime_service.dart';
 import '../../../core/repositories/application_backend.dart';
 import '../../../core/session/patient_session.dart';
 
@@ -42,6 +44,7 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
   List<Appointment>? _items;
   Object? _error;
   bool _loading = true;
+  StreamSubscription? _queueSub;
   @override
   void initState() {
     super.initState();

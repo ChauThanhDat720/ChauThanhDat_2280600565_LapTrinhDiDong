@@ -1,3 +1,6 @@
+import 'dart:async';
+import '../../../core/realtime/hospital_realtime_service.dart';
+import '../../../core/realtime/realtime_events.dart';
 import '../../../core/repositories/application_backend.dart';
 
 import 'package:flutter/material.dart';
@@ -37,6 +40,31 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
   bool _checkingIn = false;
   bool _bookingPaid = true;
   Invoice? _bookingInvoice;
+  StreamSubscription? _queueSub;
+  bool _isCalledIn = false;
+  int? _currentServingNumber;
+  int _waitingAhead = 0;
+
+  void _calculateQueuePosition() {
+    final checkedInAll = AppointmentStore.instance.appointments
+        .where((a) => a.doctorId == _appointment.doctorId && a.status == AppointmentStatus.checkedIn && a.queueNumber != null)
+        .toList()
+      ..sort((a, b) => a.queueNumber!.compareTo(b.queueNumber!));
+    final myQueue = _appointment.queueNumber ?? 1;
+    final ahead = checkedInAll.where((a) => a.queueNumber! < myQueue).length;
+    final inProg = AppointmentStore.instance.appointments
+        .where((a) => a.doctorId == _appointment.doctorId && a.status == AppointmentStatus.inProgress && a.queueNumber != null)
+        .firstOrNull;
+    if (mounted) {
+      setState(() {
+        _waitingAhead = ahead;
+        _currentServingNumber = inProg?.queueNumber;
+        if (_appointment.status == AppointmentStatus.inProgress) {
+          _isCalledIn = true;
+        }
+      });
+    }
+  }
 
   bool get _enforcePayment =>
       widget.requirePayment ||
@@ -51,6 +79,28 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
       _bookingPaid = _appointment.status == AppointmentStatus.checkedIn;
       _loadBookingPaymentStatus();
     }
+    _queueSub = HospitalRealtimeService.instance.queueStream.listen((event) {
+      if (event.appointmentId == _appointment.id) {
+        if (event.type == RealtimeEventType.queueCalled || event.status == AppointmentStatus.inProgress) {
+          if (mounted) {
+            setState(() {
+              _appointment = _appointment.copyWith(status: AppointmentStatus.inProgress);
+              _isCalledIn = true;
+            });
+          }
+        }
+      }
+      _calculateQueuePosition();
+    });
+    AppointmentStore.instance.addListener(_calculateQueuePosition);
+    _calculateQueuePosition();
+  }
+
+  @override
+  void dispose() {
+    _queueSub?.cancel();
+    AppointmentStore.instance.removeListener(_calculateQueuePosition);
+    super.dispose();
   }
 
   Future<void> _loadBookingPaymentStatus() async {
@@ -86,6 +136,14 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
     try {
       final updated = await widget.repository.checkinAppointment(
         _appointment.id,
+      );
+      HospitalRealtimeService.instance.notifyPatientCheckin(
+        appointmentId: updated.id,
+        doctorId: updated.doctorId,
+        doctorName: updated.doctorName,
+        patientName: updated.patientName,
+        queueNumber: updated.queueNumber ?? 1,
+        roomNumber: updated.roomNumber ?? 'Phòng 204',
       );
       if (mounted) {
         setState(() {

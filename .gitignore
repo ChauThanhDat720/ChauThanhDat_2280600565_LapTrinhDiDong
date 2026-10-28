@@ -57,3 +57,4 @@ config/aws.local.json
 config/aws.outputs.json
 backend/.aws-sam/
 releases/*.apk
+*.apk

@@ -1,3 +1,5 @@
+import '../../../core/realtime/hospital_realtime_service.dart';
+import '../../../core/realtime/realtime_events.dart';
 import 'dart:async';
 
 import '../../../core/repositories/application_backend.dart';
@@ -51,6 +53,7 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
   String? _loadError;
   Timer? _pollTimer;
   bool _polling = false;
+  StreamSubscription<RealtimeChatMessageEvent>? _chatRealtimeSub;
   TeleconsultationSession? _session;
   Invoice? _unpaidInvoice;
   bool _showPrescriptionSummary = true;
@@ -78,9 +81,26 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
     super.initState();
     _loadSession();
     TeleconsultationStore.instance.addListener(_onStoreChanged);
+    _chatRealtimeSub = HospitalRealtimeService.instance.chatStream.listen((event) {
+      if (event.sessionId == _session?.id || event.appointmentId == widget.appointmentId) {
+        if (_session != null) {
+          final exists = _session!.messages.any((m) => m.id == event.message.id);
+          if (!exists && mounted) {
+            final nextMessages = List<TeleconsultationMessage>.from(_session!.messages)..add(event.message);
+            setState(() {
+              _session = _session!.copyWith(
+                messages: nextMessages,
+                lastActivityAt: event.message.sentAt,
+              );
+            });
+            _scrollToBottom();
+          }
+        }
+      }
+    });
     if (widget.repository is RemoteTeleconsultationRepository) {
       _pollTimer = Timer.periodic(
-        const Duration(seconds: 15),
+        const Duration(seconds: 5),
         (_) => _pollSession(),
       );
     }
@@ -88,6 +108,7 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
 
   @override
   void dispose() {
+    _chatRealtimeSub?.cancel();
     _pollTimer?.cancel();
     TeleconsultationStore.instance.removeListener(_onStoreChanged);
     _textController.dispose();
@@ -212,6 +233,11 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
             (widget.isDoctorView ? session.doctorName : session.patientName),
         message: text.isEmpty ? '[Đã gửi hình ảnh triệu chứng]' : text,
         imageUrl: image,
+      );
+      HospitalRealtimeService.instance.notifyChatMessage(
+        sessionId: session.id,
+        appointmentId: widget.appointmentId,
+        message: sent,
       );
       if (!mounted) return;
       if (quickText == null) _textController.clear();

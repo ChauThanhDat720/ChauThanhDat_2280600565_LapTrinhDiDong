@@ -26,6 +26,27 @@ class LocationService {
     );
   }
 
+  /// Luồng cập nhật vị trí thời gian thực (Real-time GPS Location Stream)
+  Stream<PatientLocation> getPositionStream({
+    int distanceFilter = 1,
+    Duration interval = const Duration(seconds: 2),
+  }) {
+    final locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: distanceFilter,
+      timeLimit: null,
+    );
+
+    return Geolocator.getPositionStream(locationSettings: locationSettings).map(
+      (position) => PatientLocation(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracy: position.accuracy,
+        timestamp: DateTime.now(),
+      ),
+    );
+  }
+
   Future<bool> openLocationSettings() => Geolocator.openLocationSettings();
 
   Future<bool> openAppSettings() => Geolocator.openAppSettings();

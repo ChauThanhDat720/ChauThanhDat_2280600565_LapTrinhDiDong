@@ -1,3 +1,5 @@
+import 'dart:async';
+import '../../../core/realtime/hospital_realtime_service.dart';
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../data/health_vitals_repository.dart';
@@ -21,11 +23,24 @@ class HealthVitalsScreen extends StatefulWidget {
   State<HealthVitalsScreen> createState() => _HealthVitalsScreenState();
 }
 
-class _HealthVitalsScreenState extends State<HealthVitalsScreen> {
+class _HealthVitalsScreenState extends State<HealthVitalsScreen> with SingleTickerProviderStateMixin {
   bool _loading = true;
   List<HealthVital> _history = [];
   VitalsSummary _summary = const VitalsSummary();
   ChartMetric _currentMetric = ChartMetric.bloodPressure;
+
+  // Live Telemetry Stream state
+  bool _isLiveMonitoring = false;
+  Timer? _liveTelemetryTimer;
+  int _liveHeartRate = 76;
+  int _liveSystolic = 120;
+  int _liveDiastolic = 80;
+  int _liveSpo2 = 98;
+  bool _liveAlertActive = false;
+  String? _liveAlertMsg;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+  final List<double> _ecgHistory = [0.0, 0.2, -0.1, 0.0, 1.8, -0.6, 0.3, 0.0, 0.1, 0.0, 0.0, 0.2, -0.1, 0.0, 1.8, -0.6, 0.3, 0.0, 0.1, 0.0];
 
   @override
   void initState() {
@@ -520,4 +535,282 @@ class _HealthVitalsScreenState extends State<HealthVitalsScreen> {
       ),
     );
   }
+  Widget _buildLiveTelemetryCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: _liveAlertActive ? const Color(0xFFFEF2F2) : const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _liveAlertActive ? Colors.red : (_isLiveMonitoring ? const Color(0xFF10B981) : const Color(0xFF334155)),
+          width: 1.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (_liveAlertActive ? Colors.red : Colors.black).withOpacity(0.2),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _isLiveMonitoring ? const Color(0xFF10B981) : Colors.grey.shade700,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.sensors_rounded,
+                      size: 14,
+                      color: _isLiveMonitoring ? Colors.white : Colors.grey.shade400,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      _isLiveMonitoring ? 'LIVE TELEMETRY' : 'OFFLINE',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              Switch(
+                value: _isLiveMonitoring,
+                activeColor: const Color(0xFF10B981),
+                onChanged: (_) => _toggleLiveMonitoring(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (!_isLiveMonitoring) ...[
+            Text(
+              'Giám Sát Sinh Tồn Thời Gian Thực',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.95),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Bật để kết nối trực tiếp với thiết bị đeo/monitor theo dõi nhịp tim (BPM), SpO2 và huyết áp liên tục.',
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 12.5, height: 1.3),
+            ),
+          ] else ...[
+            if (_liveAlertActive)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.red.shade400),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 24),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _liveAlertMsg ?? 'Phát hiện chỉ số sinh tồn bất thường!',
+                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            ScaleTransition(
+                              scale: _pulseAnimation,
+                              child: const Icon(Icons.favorite, color: Colors.redAccent, size: 18),
+                            ),
+                            const SizedBox(width: 6),
+                            Text('NHỊP TIM', style: TextStyle(color: Colors.grey.shade400, fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              '$_liveHeartRate',
+                              style: TextStyle(
+                                color: _liveAlertActive ? Colors.redAccent : const Color(0xFF38BDF8),
+                                fontSize: 32,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text('bpm', style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.water_drop_rounded, color: Colors.cyanAccent, size: 18),
+                            const SizedBox(width: 6),
+                            Text('OXY SpO2', style: TextStyle(color: Colors.grey.shade400, fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              '$_liveSpo2',
+                              style: TextStyle(
+                                color: _liveSpo2 < 95 ? Colors.redAccent : const Color(0xFF34D399),
+                                fontSize: 32,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text('%', style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.speed_rounded, color: Colors.orangeAccent, size: 18),
+                            const SizedBox(width: 6),
+                            Text('HUYẾT ÁP', style: TextStyle(color: Colors.grey.shade400, fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              '$_liveSystolic/$_liveDiastolic',
+                              style: TextStyle(
+                                color: _liveSystolic >= 140 ? Colors.redAccent : Colors.orangeAccent,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // ECG Mini wave line
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 28,
+                    child: CustomPaint(
+                      painter: _EcgWavePainter(_ecgHistory, _liveAlertActive ? Colors.redAccent : const Color(0xFF10B981)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _liveAlertActive ? Colors.redAccent : Colors.white70,
+                    side: BorderSide(color: _liveAlertActive ? Colors.redAccent : Colors.white24),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  onPressed: _triggerSimulatedAlert,
+                  icon: Icon(_liveAlertActive ? Icons.healing_rounded : Icons.crisis_alert_rounded, size: 16),
+                  label: Text(_liveAlertActive ? 'Tắt cảnh báo' : 'Thử cảnh báo', style: const TextStyle(fontSize: 11)),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EcgWavePainter extends CustomPainter {
+  _EcgWavePainter(this.points, this.color);
+  final List<double> points;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.isEmpty) return;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+
+    final path = Path();
+    final dx = size.width / (points.length - 1);
+    final midY = size.height / 2;
+
+    path.moveTo(0, midY);
+    for (int i = 0; i < points.length; i++) {
+      final x = i * dx;
+      final y = midY - (points[i] * (size.height / 3));
+      path.lineTo(x, y.clamp(2.0, size.height - 2.0));
+    }
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _EcgWavePainter oldDelegate) => true;
 }

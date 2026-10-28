@@ -1,3 +1,5 @@
+import 'dart:async';
+import '../../../core/realtime/hospital_realtime_service.dart';
 import '../../../core/repositories/application_backend.dart';
 
 import 'package:flutter/material.dart';
@@ -31,16 +33,21 @@ class _DoctorTeleconsultationsScreenState
   bool _loading = true;
   List<TeleconsultationSession> _sessions = [];
   String _selectedFilter = 'all'; // 'all', 'needs_reply', 'active', 'closed'
+  StreamSubscription? _chatRealtimeSub;
 
   @override
   void initState() {
     super.initState();
     _loadSessions();
     TeleconsultationStore.instance.addListener(_onStoreChanged);
+    _chatRealtimeSub = HospitalRealtimeService.instance.chatStream.listen((_) {
+      if (mounted) _loadSessions();
+    });
   }
 
   @override
   void dispose() {
+    _chatRealtimeSub?.cancel();
     TeleconsultationStore.instance.removeListener(_onStoreChanged);
     super.dispose();
   }
