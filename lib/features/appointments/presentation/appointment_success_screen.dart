@@ -21,6 +21,7 @@ class AppointmentSuccessScreen extends StatefulWidget {
   final AppointmentRepository repository;
 
   @override
+<<<<<<< HEAD
   State<AppointmentSuccessScreen> createState() =>
       _AppointmentSuccessScreenState();
 }
@@ -115,6 +116,39 @@ class _AppointmentSuccessScreenState extends State<AppointmentSuccessScreen> {
                           : const Color(0xFFF59E0B),
                     ),
                   ),
+=======
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Đặt lịch thành công')),
+    body: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              const Icon(
+                Icons.check_circle,
+                size: 76,
+                color: AppColors.success,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Đặt lịch khám thành công!',
+                style: Theme.of(context).textTheme.headlineSmall,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                appointment.status == AppointmentStatus.pending
+                    ? 'Yêu cầu đặt lịch đã được gửi. Vui lòng chờ bác sĩ xác nhận.'
+                    : 'Lịch khám của bạn đã được ghi nhận.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+>>>>>>> 287bb2e (Fix bugs and update code)
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

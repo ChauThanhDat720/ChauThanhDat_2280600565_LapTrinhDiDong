@@ -7,12 +7,30 @@ class AwsSettings {
     required this.userPoolId,
     required this.appClientId,
     required this.apiBaseUrl,
+    this.allowInsecureHttp = false,
   });
   final String mode, region, userPoolId, appClientId, apiBaseUrl;
+  final bool allowInsecureHttp;
   bool get useAws => mode == 'aws';
+  bool get useShared => mode == 'shared';
   void validate() {
-    if (!['local', 'aws'].contains(mode)) {
-      throw StateError('BACKEND_MODE phải là local hoặc aws.');
+    if (!['local', 'aws', 'shared'].contains(mode)) {
+      throw StateError('BACKEND_MODE phải là local, aws hoặc shared.');
+    }
+    if (useShared) {
+      final uri = Uri.tryParse(apiBaseUrl);
+      if (uri == null ||
+          uri.host.isEmpty ||
+          uri.userInfo.isNotEmpty ||
+          uri.hasQuery ||
+          uri.hasFragment ||
+          !(uri.scheme == 'https' ||
+              (allowInsecureHttp && uri.scheme == 'http'))) {
+        throw StateError(
+          'Backend chia sẻ cần API_BASE_URL HTTPS. Demo local HTTP cần ALLOW_INSECURE_HTTP=true.',
+        );
+      }
+      return;
     }
     if (!useAws) return;
     final missing = <String>[
@@ -52,8 +70,10 @@ abstract final class AwsConfig {
     userPoolId: String.fromEnvironment('COGNITO_USER_POOL_ID'),
     appClientId: String.fromEnvironment('COGNITO_APP_CLIENT_ID'),
     apiBaseUrl: String.fromEnvironment('API_BASE_URL'),
+    allowInsecureHttp: bool.fromEnvironment('ALLOW_INSECURE_HTTP'),
   );
   static bool get useAws => settings.useAws;
+  static bool get useShared => settings.useShared;
   static String get region => settings.region;
   static String get userPoolId => settings.userPoolId;
   static String get appClientId => settings.appClientId;

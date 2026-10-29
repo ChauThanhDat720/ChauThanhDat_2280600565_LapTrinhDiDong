@@ -16,31 +16,33 @@ class HospitalRepositories {
     ApiConfig? apiConfig,
     AccessTokenProvider? accessTokenProvider,
     bool useRemote = false,
+    bool sharedAppointmentsOnly = false,
   }) {
     final config = apiConfig ?? ApiConfig();
     if (useRemote && !config.isConfigured) {
-      throw StateError('Không thể bật AWS khi API_BASE_URL chưa hợp lệ.');
+      throw StateError('Không thể bật backend khi API_BASE_URL chưa hợp lệ.');
     }
     final canUseRemote = useRemote;
     final client = canUseRemote
         ? ApiClient(config: config, accessTokenProvider: accessTokenProvider)
         : null;
-    _family = client == null ? null : RemoteFamilyRepository(client);
-    teleconsultations = client == null
+    final fullClient = sharedAppointmentsOnly ? null : client;
+    _family = fullClient == null ? null : RemoteFamilyRepository(fullClient);
+    teleconsultations = fullClient == null
         ? const LocalTeleconsultationRepository()
-        : RemoteTeleconsultationRepository(client);
-    clinicalIntake = client == null
+        : RemoteTeleconsultationRepository(fullClient);
+    clinicalIntake = fullClient == null
         ? const LocalClinicalIntakeRepository()
-        : RemoteClinicalIntakeRepository(client);
+        : RemoteClinicalIntakeRepository(fullClient);
     doctors = client == null
         ? const LocalDoctorRepository()
         : RemoteDoctorRepository(client);
     appointments = client == null
         ? const LocalAppointmentRepository()
         : RemoteAppointmentRepository(client);
-    patients = client == null
+    patients = fullClient == null
         ? const LocalPatientRepository()
-        : RemotePatientRepository(client);
+        : RemotePatientRepository(fullClient);
   }
 
   late final FamilyRepository? _family;

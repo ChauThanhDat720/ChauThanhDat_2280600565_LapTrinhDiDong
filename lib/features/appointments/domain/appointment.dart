@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/storage/local_json_storage.dart';
 import '../../../core/utils/app_timezone.dart';
+import 'visit_journey.dart';
 
 enum AppointmentStatus {
   pending,
@@ -83,6 +84,7 @@ class Appointment {
     this.isFollowUp = false,
     this.parentAppointmentId,
     this.hasIntake = false,
+    this.journey,
   });
 
   final String id,
@@ -97,12 +99,23 @@ class Appointment {
       departmentId;
   final DateTime date;
   final AppointmentStatus status;
-  final DateTime? createdAt, updatedAt, cancelledAt, reviewedAt, checkedInAt, followUpDate;
-  final String? cancellationReason, diagnosis, prescription, statusNote, reviewNote, roomNumber;
+  final DateTime? createdAt,
+      updatedAt,
+      cancelledAt,
+      reviewedAt,
+      checkedInAt,
+      followUpDate;
+  final String? cancellationReason,
+      diagnosis,
+      prescription,
+      statusNote,
+      reviewNote,
+      roomNumber;
   final int? rating, queueNumber;
   final bool isFollowUp;
   final String? parentAppointmentId;
   final bool hasIntake;
+  final VisitJourney? journey;
 
   String get appointmentId => id;
   DateTime get startTime => DateTime(
@@ -114,7 +127,8 @@ class Appointment {
   );
   DateTime get endTime => startTime.add(const Duration(minutes: 30));
   String get dateLabel => AppTimezone.date(date);
-  String? get followUpDateLabel => followUpDate != null ? AppTimezone.date(followUpDate!) : null;
+  String? get followUpDateLabel =>
+      followUpDate != null ? AppTimezone.date(followUpDate!) : null;
 
   bool get hasActiveFollowUp =>
       status == AppointmentStatus.completed && followUpDate != null;
@@ -123,8 +137,11 @@ class Appointment {
     if (followUpDate == null) return null;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final target =
-        DateTime(followUpDate!.year, followUpDate!.month, followUpDate!.day);
+    final target = DateTime(
+      followUpDate!.year,
+      followUpDate!.month,
+      followUpDate!.day,
+    );
     return target.difference(today).inDays;
   }
 
@@ -148,6 +165,7 @@ class Appointment {
     bool? isFollowUp,
     String? parentAppointmentId,
     bool? hasIntake,
+    VisitJourney? journey,
   }) => Appointment(
     id: id,
     doctorId: doctorId,
@@ -178,6 +196,7 @@ class Appointment {
     isFollowUp: isFollowUp ?? this.isFollowUp,
     parentAppointmentId: parentAppointmentId ?? this.parentAppointmentId,
     hasIntake: hasIntake ?? this.hasIntake,
+    journey: journey ?? this.journey,
   );
 
   factory Appointment.fromJson(Map<String, dynamic> j) {
@@ -209,12 +228,20 @@ class Appointment {
       reviewNote: j['reviewNote'] as String?,
       reviewedAt: DateTime.tryParse(j['reviewedAt'] as String? ?? ''),
       queueNumber: (j['queueNumber'] ?? j['queue_number']) as int?,
-      checkedInAt: DateTime.tryParse((j['checkedInAt'] ?? j['checked_in_at']) as String? ?? ''),
+      checkedInAt: DateTime.tryParse(
+        (j['checkedInAt'] ?? j['checked_in_at']) as String? ?? '',
+      ),
       roomNumber: (j['roomNumber'] ?? j['room_number']) as String?,
-      followUpDate: DateTime.tryParse(j['followUpDate'] as String? ?? j['follow_up_date'] as String? ?? ''),
+      followUpDate: DateTime.tryParse(
+        j['followUpDate'] as String? ?? j['follow_up_date'] as String? ?? '',
+      ),
       isFollowUp: (j['isFollowUp'] ?? j['is_follow_up']) as bool? ?? false,
-      parentAppointmentId: (j['parentAppointmentId'] ?? j['parent_appointment_id']) as String?,
+      parentAppointmentId:
+          (j['parentAppointmentId'] ?? j['parent_appointment_id']) as String?,
       hasIntake: (j['hasIntake'] ?? j['has_intake']) as bool? ?? false,
+      journey: j['journey'] is Map<String, dynamic>
+          ? VisitJourney.fromJson(j['journey'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -241,6 +268,7 @@ class Appointment {
     'is_follow_up': isFollowUp,
     'parent_appointment_id': parentAppointmentId,
     'has_intake': hasIntake,
+    if (journey != null) 'journey': journey!.toJson(),
   };
 }
 

@@ -1,12 +1,15 @@
 import '../config/aws_config.dart';
 import '../services/auth_service.dart';
+import '../../features/auth/repositories/shared_auth_repository.dart';
 import 'hospital_repositories.dart';
 
-/// Shared dependency boundary. Supplying --dart-define-from-file selects AWS
-/// for every screen using these repositories; local mode keeps demo behavior.
+/// Selects local, AWS, or the shared booking API using BACKEND_MODE.
 abstract final class ApplicationBackend {
   static final repositories = HospitalRepositories(
-    useRemote: AwsConfig.useAws,
-    accessTokenProvider: AuthService.instance.apiIdToken,
+    useRemote: AwsConfig.useAws || AwsConfig.useShared,
+    sharedAppointmentsOnly: AwsConfig.useShared,
+    accessTokenProvider: AwsConfig.useShared
+        ? SharedAuthRepository.instance.accessToken
+        : AuthService.instance.apiIdToken,
   );
 }

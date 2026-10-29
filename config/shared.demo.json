@@ -1,0 +1,5 @@
+{
+  "BACKEND_MODE": "shared",
+  "API_BASE_URL": "http://127.0.0.1:3000",
+  "ALLOW_INSECURE_HTTP": true
+}

@@ -55,6 +55,7 @@ backend/data/*.db*
 # Local AWS metadata and SAM build output (credentials stay in AWS CLI/SSO).
 config/aws.local.json
 config/aws.outputs.json
+config/shared.local.json
 backend/.aws-sam/
 releases/*.apk
 *.apk

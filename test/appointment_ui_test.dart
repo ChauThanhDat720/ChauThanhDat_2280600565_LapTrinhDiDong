@@ -319,6 +319,7 @@ void main() {
     await t.pumpAndSettle();
     expect(r.creates, 1);
     expect(r.createdInput!.doctorId, 'dr-linh');
+    expect(r.createdInput!.status, AppointmentStatus.pending);
     expect(r.createdInput!.patientId, isEmpty);
     expect(find.text('Đặt lịch khám thành công!'), findsOneWidget);
     expect(find.text('APT-01'), findsOneWidget);

@@ -1,5 +1,7 @@
 # Smart Hospital backend
 
+- `shared/`: backend demo đồng bộ đặt lịch (Node.js 24, SQLite tích hợp sẵn, không cần `npm ci`). Chạy `npm run start:demo`, mở `http://localhost:3000/doctor`. Kiểm thử: `npm run test:shared`. Xem [hướng dẫn demo và VPS](../docs/SHARED_DEMO.md).
+
 - `server.js`, `src/`: máy chủ Node/SQLite demo local. Chạy `npm ci`, `npm test`, `npm start`.
 - `aws/`: backend AWS độc lập, dùng AWS SDK v3, DynamoDB và S3; không dùng SQLite.
 - `template.yaml`: SAM stack Cognito, API Gateway REST, Lambda, DynamoDB và S3.

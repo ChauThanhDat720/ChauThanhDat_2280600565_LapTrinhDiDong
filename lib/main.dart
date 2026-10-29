@@ -18,7 +18,7 @@ void main() {
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Text(
-                'Cấu hình ứng dụng chưa hợp lệ.\n$error\nKiểm tra file config/aws.local.json và chạy lại.',
+                'Cấu hình ứng dụng chưa hợp lệ.\n$error\nKiểm tra BACKEND_MODE và API_BASE_URL trong file cấu hình và chạy lại.',
               ),
             ),
           ),

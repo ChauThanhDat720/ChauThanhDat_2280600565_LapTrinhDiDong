@@ -1,6 +1,7 @@
 import 'dart:async';
 import '../../../core/realtime/hospital_realtime_service.dart';
 import '../../../core/repositories/application_backend.dart';
+import '../../../core/session/patient_session.dart';
 
 import 'package:flutter/material.dart';
 
@@ -53,7 +54,9 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
   Future<void> _loadAppointments() async {
     setState(() => _loading = true);
     try {
-      final list = await widget.repository.getAppointments();
+      final list = PatientSession.instance.role == 'doctor'
+          ? await widget.repository.getDoctorAppointments()
+          : await widget.repository.getAppointments();
       if (mounted) {
         setState(() {
           _appointments = list;
@@ -66,8 +69,11 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
   }
 
   Future<void> _processCheckin(String rawCode) async {
-    if (rawCode.trim().isEmpty) return;
-    final cleanId = rawCode.trim().replaceAll('CHECKIN:', '');
+    if (_processing || rawCode.trim().isEmpty) return;
+    final cleanId = rawCode
+        .trim()
+        .replaceFirst(RegExp(r'^CHECKIN:', caseSensitive: false), '')
+        .trim();
 
     if (widget.repository is LocalAppointmentRepository ||
         widget.repository is RemoteAppointmentRepository) {

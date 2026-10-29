@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Smart Hospital · Tiếp nhận lịch khám</title>
+<style>
+:root{font-family:system-ui,-apple-system,sans-serif;color:#173c44;background:#f2f7f8}*{box-sizing:border-box}body{margin:0}header{background:#123e47;color:white;padding:24px max(24px,calc((100vw - 1120px)/2));display:flex;align-items:center;justify-content:space-between;gap:20px}h1{font-size:22px;margin:0}header p{color:#b5d5da;margin:6px 0 0;font-size:14px}main{max-width:1168px;margin:36px auto;padding:0 24px}.box{background:white;border:1px solid #dce7e9;border-radius:18px;padding:28px;box-shadow:0 5px 24px #193e4606}#login{max-width:440px;margin:70px auto}h2{margin:0 0 10px;font-size:24px}p{line-height:1.6}label{display:block;font-size:14px;font-weight:600;margin:20px 0 8px}input,select{font:inherit;border:1px solid #c7d8dc;border-radius:9px;padding:12px;width:100%;background:white}button{font:inherit;font-weight:600;cursor:pointer;border-radius:9px;border:0;padding:12px 18px;background:#087e88;color:white}button:disabled{opacity:.5;cursor:wait}.secondary{background:#e7f3f4;color:#17646b}.danger{background:#fff0ee;color:#a14135}.row{display:flex;gap:14px;align-items:center;flex-wrap:wrap}.between{justify-content:space-between}.muted,small{color:#62818a}.muted{font-size:14px}#error{color:#ac342d;white-space:pre-wrap}#login button{width:100%;margin-top:22px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:24px 0}.stat{padding:22px}.stat strong{display:block;font-size:32px;margin-top:10px;color:#087e88}.toolbar{margin:22px 0}select{width:auto}#appointments{display:grid;gap:14px}.appointment{padding:22px}.appointment h3{font-size:18px;margin:0}.badge{font-size:12px;background:#fff4d7;color:#8b6518;border-radius:99px;padding:6px 12px}.confirmed{background:#e0f5ef;color:#1c7154}.cancelled{background:#f6e6e5;color:#8d4440}.completed{background:#e4ebfc;color:#365c9e}.date{font-weight:650;color:#176b78;margin:16px 0 6px}.note{font-size:14px;border-top:1px solid #edf2f3;padding-top:12px}.actions{margin-top:16px}#empty{text-align:center;padding:48px}#sync{font-size:13px;color:#62818a}.hidden,[hidden]{display:none!important}footer{text-align:center;font-size:12px;color:#62818a;margin:34px 0}@media(max-width:600px){header{padding:20px}main{padding:0 16px;margin-top:24px}.stats{gap:8px}.stat{padding:14px}.stat strong{font-size:26px}.box{padding:20px}h1{font-size:18px}}
+</style><style>
+dialog{border:1px solid #c7d8dc;border-radius:16px;max-width:680px;width:calc(100% - 32px);padding:28px;color:#173c44}dialog::backdrop{background:#102f3b88}textarea{font:inherit;width:100%;padding:12px;border:1px solid #c7d8dc;border-radius:9px;resize:vertical}pre{white-space:pre-wrap;font:inherit;line-height:1.6;background:#f2f8f8;padding:16px;border-radius:10px}.journey{border-left:3px solid #087e88;padding:10px 14px;margin:14px 0;background:#f0f8f8}.checked_in{background:#dff4ff;color:#175b83}#formError{color:#ac342d;white-space:pre-wrap}
+</style></head>
+<body><header><div><h1>✚ Smart Hospital</h1><p>Tiếp nhận & xác nhận lịch khám</p></div><button id="logout" class="secondary" hidden>Đăng xuất</button></header>
+<main><section id="login" class="box"><h2>Dành cho bác sĩ</h2><p class="muted">Đăng nhập để nhận lịch hẹn từ ứng dụng của bệnh nhân.</p>
+<form id="loginForm"><label for="email">Email</label><input id="email" type="email" autocomplete="username" required placeholder="doctor.linh@hospital.com"><label for="password">Mật khẩu</label><input id="password" type="password" autocomplete="current-password" required><button id="submit">Đăng nhập</button></form><p id="demo" class="muted" hidden>Demo: doctor.linh@hospital.com · Doctor@123<br>Bệnh nhân trên app: patient.an@hospital.com · Patient@123</p></section>
+<p id="error" role="alert"></p><section id="dashboard" hidden><div class="row between"><div><h2 id="name"></h2><div id="department" class="muted"></div></div><div id="sync" role="status">Đang tải lịch...</div></div>
+<div class="stats"><div class="box stat">Chờ xác nhận<strong id="pending">0</strong></div><div class="box stat">Đã xác nhận<strong id="confirmed">0</strong></div><div class="box stat">Tổng lịch hẹn<strong id="total">0</strong></div></div>
+<div class="row between toolbar"><h3>Ca khám thuộc khoa đang phụ trách</h3><div class="row"><select id="filter" aria-label="Lọc trạng thái"><option value="all">Tất cả</option><option value="pending">Chờ xác nhận</option><option value="confirmed">Đã xác nhận</option><option value="checked_in">Đã tiếp đón / Đang khám</option><option value="cancelled">Đã hủy</option><option value="completed">Đã hoàn thành</option></select><button id="refresh" class="secondary">Làm mới</button></div></div>
+<div id="appointments"></div><div id="empty" class="box" hidden><h3>Chưa có lịch hẹn</h3><p class="muted">Lịch đặt đúng bác sĩ này trên điện thoại sẽ xuất hiện tự động.</p></div></section>
+<footer id="footer">Dữ liệu được lưu trên máy chủ · Tự cập nhật mỗi 5 giây</footer></main>
+<dialog id="visitDialog" aria-labelledby="visitTitle"><form id="visitForm">
+<h2 id="visitTitle"></h2><p id="visitPatient" class="muted"></p>
+<div id="labOrderField"><label for="labOrder">Nội dung chỉ định cận lâm sàng</label><textarea id="labOrder" rows="3" maxlength="1000"></textarea></div>
+<div id="labResultField"><label for="labResult">Ghi nhận kết quả đã kiểm tra</label><textarea id="labResult" rows="3" maxlength="2000"></textarea></div>
+<div id="prescriptionFields"><label for="diagnosis">Kết luận khám</label><textarea id="diagnosis" rows="2" maxlength="1000"></textarea><label for="prescription">Đơn thuốc cho bệnh nhân</label><textarea id="prescription" rows="6" maxlength="4000" placeholder="Bác sĩ nhập tên thuốc, hàm lượng, liều dùng, đường dùng và số ngày. Mỗi thuốc một dòng."></textarea><label for="advice">Lời dặn của bác sĩ</label><textarea id="advice" rows="2" maxlength="1000"></textarea><p class="muted">Lưu đơn thuốc sẽ kết thúc ca khám và gửi nội dung đến điện thoại bệnh nhân. Đơn chỉ lưu khi bạn bấm nút bên dưới.</p></div>
+<p id="formError" role="alert"></p><div class="row"><button id="saveVisit" type="submit">Lưu và gửi bệnh nhân</button><button id="cancelVisit" type="button" class="secondary">Quay lại</button></div>
+</form></dialog>
+<script>
+const $ = (id) => document.getElementById(id);
+const labels = {pending:'Chờ xác nhận', confirmed:'Đã xác nhận', checked_in:'Đã tiếp đón / Đang khám', cancelled:'Đã hủy', completed:'Đã hoàn thành'};
+const stageLabels={waiting:'Chờ gọi khám',consulting:'Đang khám chuyên khoa',lab_ordered:'Đang thực hiện cận lâm sàng',lab_reported:'Bệnh nhân báo đã thực hiện · Chờ bác sĩ xem',lab_completed:'Đã xem kết quả · Chờ lên đơn',prescribed:'Đã gửi đơn thuốc',finished:'Bệnh nhân đã nhận thuốc'};
+let selectedVisit=null, visitAction='';
+let token = sessionStorage.getItem('hospitalToken');
+let items = [], loading = false, changing = false;
+async function api(path, method='GET', body) {
+  const response = await fetch(path, {method, headers:{'Content-Type':'application/json', ...(token ? {Authorization:'Bearer '+token} : {})}, body:body ? JSON.stringify(body) : undefined});
+  const value = await response.json();
+  if (!response.ok) {
+    if (response.status === 401 && !path.endsWith('login')) showLogin();
+    throw new Error(value.message || 'Không thể kết nối máy chủ.');
+  }
+  return value;
+}
+function showLogin() {
+  token = null; items = []; sessionStorage.removeItem('hospitalToken');
+  $('login').hidden=false; $('dashboard').hidden=true; $('logout').hidden=true;
+  $('appointments').replaceChildren();
+}
+function element(tag, text, className) {
+  const el = document.createElement(tag); if (text) el.textContent=text; if(className)el.className=className; return el;
+}
+function render() {
+  $('pending').textContent=items.filter(a=>a.status==='pending').length;
+  $('confirmed').textContent=items.filter(a=>['confirmed','checked_in'].includes(a.status)).length;
+  $('total').textContent=items.length;
+  const filtered=items.filter(a=>$('filter').value==='all'||a.status===$('filter').value);
+  $('appointments').replaceChildren(); $('empty').hidden=filtered.length>0;
+  for (const a of filtered) {
+    const card=element('article', '', 'box appointment');
+    const head=element('div','','row between'); head.append(element('h3',a.patientName),element('span',labels[a.status]||a.status,'badge '+a.status));
+    card.append(head,element('div',new Intl.DateTimeFormat('vi-VN',{dateStyle:'full',timeStyle:'short',timeZone:'Asia/Ho_Chi_Minh'}).format(new Date(a.startTime)),'date'),element('small','Mã lịch: '+a.id),element('p','Lý do khám: '+a.reason));
+    if(a.statusNote) card.append(element('p',a.statusNote,'note'));
+    const j=a.journey||{};
+    if(a.queueNumber) card.append(element('p','Số thứ tự: '+String(a.queueNumber).padStart(2,'0')+' · '+a.roomNumber));
+    if(j.stage){const progress=element('div','','journey');progress.append(element('strong',stageLabels[j.stage]||j.stage),element('p',j.message));card.append(progress);}
+    if(j.labOrder)card.append(element('p','Chỉ định: '+j.labOrder));
+    if(j.labResultNote)card.append(element('p','Đã kiểm tra kết quả: '+j.labResultNote));
+    if(a.prescription){card.append(element('h4','Đơn thuốc đã gửi bệnh nhân'),element('p','Kết luận: '+(a.diagnosis||'')),element('pre',a.prescription));}
+    if(j.paymentSimulatedAt)card.append(element('p','Bệnh nhân đã thanh toán mô phỏng (không chuyển tiền).'));
+    if(j.medicinesReceivedAt)card.append(element('p','Bệnh nhân đã xác nhận nhận thuốc.'));
+    const actions=element('div','','row actions');
+    const button=(label,fn)=>{const b=element('button',label);b.onclick=fn;actions.append(b);};
+    if(a.status==='pending') {
+      const accept=element('button','Xác nhận lịch'); accept.onclick=()=>update(a,'confirmed'); actions.append(accept);
+      const decline=element('button','Từ chối','danger'); decline.onclick=()=>update(a,'cancelled'); actions.append(decline);
+    }
+    if(a.status==='confirmed')button('Tiếp đón bệnh nhân',()=>perform(a,'checkin'));
+    if(a.status==='checked_in'){
+      if(j.stage==='waiting')button('Gọi vào khám',()=>perform(a,'call'));
+      if(j.stage==='consulting')button('Chỉ định cận lâm sàng',()=>openVisit(a,'order_lab'));
+      if(j.stage==='lab_reported')button('Xác nhận đã xem kết quả',()=>openVisit(a,'review_lab'));
+      if(['consulting','lab_completed'].includes(j.stage))button('Lên đơn thuốc & hoàn tất khám',()=>openVisit(a,'prescribe'));
+    }
+    card.append(actions); $('appointments').append(card);
+  }
+}
+async function perform(a,action,body={}) {
+  if(changing||loading)return false;
+  changing=true;
+  for(const b of $('appointments').querySelectorAll('button'))b.disabled=true;
+  let failure='';
+  try{await api('/appointments/'+encodeURIComponent(a.id)+(action==='checkin'?'/checkin':'/journey'),'POST',{...body,action});}
+  catch(e){failure=e.message;}
+  finally{changing=false;await load();if(failure)$('error').textContent=failure;}
+  if(failure){$('formError').textContent=failure;return false;}return true;
+}
+function openVisit(a,action){
+  selectedVisit=a;visitAction=action;$('formError').textContent='';
+  $('visitTitle').textContent={order_lab:'Chỉ định cận lâm sàng',review_lab:'Kiểm tra kết quả',prescribe:'Lên đơn thuốc cho bệnh nhân'}[action];
+  $('visitPatient').textContent=a.patientName+' · '+a.department+' · '+a.id;
+  for(const [field,input,enabled] of [['labOrderField','labOrder',action==='order_lab'],['labResultField','labResult',action==='review_lab']]){
+    $(field).hidden=!enabled;$(input).required=enabled;$(input).value='';
+  }
+  $('prescriptionFields').hidden=action!=='prescribe';
+  $('diagnosis').required=$('prescription').required=action==='prescribe';
+  $('diagnosis').value=a.diagnosis||'';$('prescription').value=a.prescription||'';$('advice').value='';
+  $('visitDialog').showModal();
+}
+$('cancelVisit').onclick=()=>{if(!changing)$('visitDialog').close();};
+$('visitDialog').addEventListener('cancel',event=>{if(changing)event.preventDefault();});
+$('visitForm').onsubmit=async(event)=>{
+  event.preventDefault();if(changing||!selectedVisit)return;
+  $('saveVisit').disabled=true;$('formError').textContent='';
+  const ok=await perform(selectedVisit,visitAction,{labOrder:$('labOrder').value,labResultNote:$('labResult').value,diagnosis:$('diagnosis').value,prescription:$('prescription').value,note:$('advice').value});
+  $('saveVisit').disabled=false;if(ok)$('visitDialog').close();
+};
+async function load() {
+  if (!token || loading || changing) return;
+  loading=true;
+  try { const data=await api('/doctors/me/appointments'); items=data.items; render(); $('error').textContent=''; $('sync').textContent='Đã đồng bộ lúc '+new Date().toLocaleTimeString('vi-VN'); }
+  catch(e) { $('error').textContent=e.message; $('sync').textContent='Chưa đồng bộ được · Sẽ thử lại'; }
+  finally {loading=false;}
+}
+async function update(a,status) {
+  if(changing)return;
+  const note=prompt(status==='confirmed'?'Ghi chú xác nhận (có thể để trống):':'Lý do từ chối lịch khám:','');
+  if(note===null)return;
+  changing=true;
+  for(const b of $('appointments').querySelectorAll('button'))b.disabled=true;
+  let failure='';
+  try {await api('/appointments/'+encodeURIComponent(a.id)+'/status','PATCH',{status,note});}
+  catch(e){failure=e.message;}
+  finally{changing=false; await load(); if(failure)$('error').textContent=failure;}
+}
+async function openDashboard(user) {
+  if(user.role!=='doctor'){showLogin(); throw new Error('Trang này dành cho bác sĩ. Hãy dùng tài khoản doctor.linh@hospital.com trong bản demo.');}
+  $('name').textContent=user.fullName; $('department').textContent=user.department||'';
+  $('login').hidden=true; $('dashboard').hidden=false; $('logout').hidden=false; await load();
+}
+$('loginForm').onsubmit=async(event)=>{
+  event.preventDefault(); $('submit').disabled=true; $('error').textContent='';
+  try{const data=await api('/auth/login','POST',{email:$('email').value,password:$('password').value}); token=data.token; sessionStorage.setItem('hospitalToken',token); $('password').value=''; await openDashboard(data.user);}
+  catch(e){$('error').textContent=e.message;}finally{$('submit').disabled=false;}
+};
+$('logout').onclick=async()=>{try{await api('/auth/logout','POST');showLogin();}catch(e){$('error').textContent=e.message;}};
+$('refresh').onclick=load; $('filter').onchange=render;
+setInterval(()=>{if(!document.hidden)load();},5000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});
+(async()=>{try{const health=await api('/health');$('demo').hidden=!health.demo;if(health.demo)$('footer').textContent='Bản demo · Chỉ dùng dữ liệu giả · Tự cập nhật mỗi 5 giây';if(token)await openDashboard((await api('/auth/me')).user);}catch(e){$('error').textContent=e.message;}})();
+</script></body></html>

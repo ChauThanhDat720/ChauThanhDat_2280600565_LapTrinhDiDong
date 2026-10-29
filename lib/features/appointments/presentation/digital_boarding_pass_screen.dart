@@ -1,6 +1,10 @@
 import 'dart:async';
+<<<<<<< HEAD
 import '../../../core/realtime/hospital_realtime_service.dart';
 import '../../../core/realtime/realtime_events.dart';
+=======
+
+>>>>>>> 287bb2e (Fix bugs and update code)
 import '../../../core/repositories/application_backend.dart';
 
 import 'package:flutter/material.dart';
@@ -38,6 +42,7 @@ class DigitalBoardingPassScreen extends StatefulWidget {
 class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
   late Appointment _appointment;
   bool _checkingIn = false;
+<<<<<<< HEAD
   bool _bookingPaid = true;
   Invoice? _bookingInvoice;
   StreamSubscription? _queueSub;
@@ -70,11 +75,17 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
       widget.requirePayment ||
       widget.repository is LocalAppointmentRepository ||
       widget.repository is RemoteAppointmentRepository;
+=======
+  Timer? _syncTimer;
+  bool _reading = false;
+  bool _syncError = false;
+>>>>>>> 287bb2e (Fix bugs and update code)
 
   @override
   void initState() {
     super.initState();
     _appointment = widget.appointment;
+<<<<<<< HEAD
     if (_enforcePayment) {
       _bookingPaid = _appointment.status == AppointmentStatus.checkedIn;
       _loadBookingPaymentStatus();
@@ -113,10 +124,17 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
       setState(() {
         _bookingInvoice = inv;
         _bookingPaid = paid;
+=======
+    if (widget.repository is RemoteAppointmentRepository) {
+      _refresh();
+      _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) _refresh();
+>>>>>>> 287bb2e (Fix bugs and update code)
       });
     }
   }
 
+<<<<<<< HEAD
   Future<void> _payBookingFee() async {
     final repo = LocalPaymentRepository();
     final inv =
@@ -129,9 +147,68 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
       ),
     );
     await _loadBookingPaymentStatus();
+=======
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    if (_reading || _checkingIn || !mounted) return;
+    _reading = true;
+    try {
+      final updated = await widget.repository.getAppointmentById(
+        _appointment.id,
+      );
+      if (mounted && !_checkingIn && updated != null) {
+        final older =
+            updated.updatedAt != null &&
+            _appointment.updatedAt != null &&
+            updated.updatedAt!.isBefore(_appointment.updatedAt!);
+        if (!older) {
+          setState(() {
+            _appointment = updated;
+            _syncError = false;
+          });
+        }
+      }
+    } catch (_) {
+      if (mounted) setState(() => _syncError = true);
+    } finally {
+      _reading = false;
+    }
+  }
+
+  Future<void> _journeyAction(String action) async {
+    if (_checkingIn || widget.repository is! AppointmentJourneyRepository) {
+      return;
+    }
+    setState(() => _checkingIn = true);
+    try {
+      final updated = await (widget.repository as AppointmentJourneyRepository)
+          .performJourneyAction(_appointment.id, action);
+      if (mounted) {
+        setState(() {
+          _appointment = updated;
+          _syncError = false;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
+      }
+    } finally {
+      if (mounted) setState(() => _checkingIn = false);
+    }
+>>>>>>> 287bb2e (Fix bugs and update code)
   }
 
   Future<void> _checkIn() async {
+    if (_checkingIn || _appointment.status != AppointmentStatus.confirmed) {
+      return;
+    }
     setState(() => _checkingIn = true);
     try {
       final updated = await widget.repository.checkinAppointment(
@@ -175,7 +252,9 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isCheckedIn = _appointment.status == AppointmentStatus.checkedIn;
+    final isCheckedIn =
+        _appointment.status == AppointmentStatus.checkedIn ||
+        _appointment.status == AppointmentStatus.completed;
     final checkinCode = 'CHECKIN:${_appointment.id}';
     final route = HospitalNavigationResolver.resolveRoute(_appointment);
 
@@ -183,6 +262,13 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
       appBar: AppBar(
         title: const Text('Thẻ Tiếp đón Phòng khám'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            onPressed: _checkingIn ? null : _refresh,
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Cập nhật lộ trình',
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -191,6 +277,22 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
             constraints: const BoxConstraints(maxWidth: 480),
             child: Column(
               children: [
+                if (_syncError)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      'Chưa cập nhật được từ bác sĩ. Đang hiển thị thông tin lần trước.',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                if (_appointment.journey != null)
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.notifications_active_outlined),
+                      title: Text(_appointment.journey!.label),
+                      subtitle: Text(_appointment.journey!.message),
+                    ),
+                  ),
                 // Digital Boarding Pass Ticket Container
                 Container(
                   decoration: BoxDecoration(
@@ -571,6 +673,7 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                 const SizedBox(height: 20),
 
                 // Action simulation button
+<<<<<<< HEAD
                 if (!isCheckedIn) ...[
                   if (!_bookingPaid) ...[
                     FilledButton.icon(
@@ -587,6 +690,13 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                         ),
                       ),
                       onPressed: _payBookingFee,
+=======
+                if (_appointment.status == AppointmentStatus.confirmed) ...[
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 50),
+                      backgroundColor: const Color(0xFF0D9488),
+>>>>>>> 287bb2e (Fix bugs and update code)
                     ),
                     const SizedBox(height: 8),
                     const Text(
@@ -634,6 +744,12 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                     ),
                   ],
                 ],
+                if (_appointment.status == AppointmentStatus.pending)
+                  const Text(
+                    'Lịch đang chờ bác sĩ xác nhận. Bạn có thể check-in sau khi được duyệt.',
+                  ),
+                if (_appointment.status == AppointmentStatus.cancelled)
+                  const Text('Lịch đã hủy, không thể check-in.'),
 
                 const SizedBox(height: 20),
 
@@ -870,7 +986,8 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'BƯỚC ${step.stepNumber}:',
@@ -881,15 +998,12 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                         letterSpacing: 0.5,
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        step.title,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F172A),
-                        ),
+                    Text(
+                      step.title,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
                       ),
                     ),
                     if (step.badge != null)
@@ -954,12 +1068,77 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                     height: 1.35,
                   ),
                 ),
+                ..._journeyControls(step.stepNumber),
               ],
             ),
           ),
         ),
       ],
     );
+  }
+
+  List<Widget> _journeyControls(int step) {
+    final journey = _appointment.journey;
+    if (journey == null ||
+        widget.repository is! AppointmentJourneyRepository ||
+        _appointment.status == AppointmentStatus.cancelled) {
+      return const [];
+    }
+    final widgets = <Widget>[];
+    if (step == 3 && journey.hasLabOrder) {
+      widgets.add(
+        Text(
+          'Chỉ định của bác sĩ: ${journey.labOrder}',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      );
+      if (journey.labResultNote != null) {
+        widgets.add(Text('Bác sĩ ghi nhận: ${journey.labResultNote}'));
+      }
+      if (journey.stage == 'lab_ordered') {
+        widgets.add(
+          FilledButton.tonal(
+            onPressed: _checkingIn ? null : () => _journeyAction('report_lab'),
+            child: const Text('Tôi đã thực hiện cận lâm sàng'),
+          ),
+        );
+      }
+    }
+    if (step == 4 && journey.prescribed) {
+      widgets.addAll([
+        Text('Kết luận: ${_appointment.diagnosis ?? ''}'),
+        const SizedBox(height: 8),
+        const Text(
+          'Đơn thuốc của bác sĩ',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        SelectableText(_appointment.prescription ?? ''),
+        if (_appointment.statusNote?.isNotEmpty == true)
+          Text('Lời dặn: ${_appointment.statusNote}'),
+        const SizedBox(height: 8),
+      ]);
+      if (!journey.paymentSimulated) {
+        widgets.add(
+          FilledButton.tonal(
+            onPressed: _checkingIn
+                ? null
+                : () => _journeyAction('simulate_payment'),
+            child: const Text('Mô phỏng thanh toán (không chuyển tiền)'),
+          ),
+        );
+      }
+      if (journey.paymentSimulated && !journey.medicinesReceived) {
+        widgets.add(
+          FilledButton(
+            onPressed: _checkingIn
+                ? null
+                : () => _journeyAction('receive_medicines'),
+            child: const Text('Xác nhận tôi đã nhận thuốc'),
+          ),
+        );
+      }
+    }
+    return widgets;
   }
 
   void _showHospitalFloorMapModal(BuildContext context, HospitalRoute route) {

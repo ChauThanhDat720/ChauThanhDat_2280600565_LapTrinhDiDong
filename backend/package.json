@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "start:shared": "node shared/server.js",
+    "start:demo": "DEMO_MODE=1 node shared/server.js",
+    "test:shared": "node --test shared/shared.test.js",
     "start": "node server.js",
     "test": "node --test tests/",
     "format:check": "node -e \"['src/handlers', 'src/repositories', 'src/utils'].forEach(d => fs.readdirSync(d).filter(f => f.endsWith('.js')).forEach(f => import('./' + d + '/' + f)))\""

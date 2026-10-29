@@ -1,6 +1,11 @@
+<<<<<<< HEAD
 import '../../../core/realtime/realtime_events.dart';
 import 'dart:async';
 import '../../../core/realtime/hospital_realtime_service.dart';
+=======
+import 'dart:async';
+
+>>>>>>> 287bb2e (Fix bugs and update code)
 import '../../../core/repositories/application_backend.dart';
 import '../../notifications/data/notification_store.dart';
 import '../../notifications/domain/notification_item.dart';
@@ -47,6 +52,8 @@ class DoctorDashboardScreen extends StatefulWidget {
 }
 
 class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
+  Timer? _syncTimer;
+  bool _fetching = false;
   bool _loading = false;
   List<Appointment> _appointments = [];
   AppointmentStatus? _filterStatus;
@@ -61,6 +68,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     super.initState();
     AppointmentStore.instance.addListener(_onStoreChanged);
     _loadData();
+<<<<<<< HEAD
     AppointmentStore.instance.addListener(_loadData);
     _queueRealtimeSub = HospitalRealtimeService.instance.queueStream.listen((event) {
       if (mounted) {
@@ -96,11 +104,27 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
             if (mounted) setState(() => _appointments = items);
           })
           .catchError((_) {});
+=======
+    if (widget.repository is RemoteAppointmentRepository) {
+      _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
+          _loadData(silent: true);
+        }
+      });
+>>>>>>> 287bb2e (Fix bugs and update code)
     }
   }
 
-  Future<void> _loadData() async {
-    setState(() => _loading = true);
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadData({bool silent = false}) async {
+    if (_fetching || !mounted) return;
+    _fetching = true;
+    if (!silent) setState(() => _loading = true);
     try {
       await AppointmentStore.instance.init();
       final items = await widget.repository.getDoctorAppointments(
@@ -167,12 +191,13 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
         if (mounted) setState(() => _appointments = items);
       }
     } catch (_) {
-      if (mounted) {
+      if (mounted && !silent) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Không thể tải danh sách lịch khám.')),
         );
       }
     } finally {
+      _fetching = false;
       if (mounted) setState(() => _loading = false);
     }
   }

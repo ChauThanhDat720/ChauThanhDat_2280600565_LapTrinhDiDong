@@ -1,5 +1,11 @@
 import 'dart:async';
+<<<<<<< HEAD
 import '../../../core/realtime/hospital_realtime_service.dart';
+=======
+
+import '../../../core/config/aws_config.dart';
+
+>>>>>>> 287bb2e (Fix bugs and update code)
 import '../../../core/repositories/application_backend.dart';
 import '../../../core/session/patient_session.dart';
 
@@ -41,6 +47,8 @@ class AppointmentListScreen extends StatefulWidget {
 }
 
 class _AppointmentListScreenState extends State<AppointmentListScreen> {
+  Timer? _syncTimer;
+  bool _fetching = false;
   List<Appointment>? _items;
   Object? _error;
   bool _loading = true;
@@ -51,10 +59,18 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
     PatientSession.instance.addListener(_onChanged);
     AppointmentStore.instance.addListener(_onChanged);
     _load();
+    if (widget.repository is RemoteAppointmentRepository) {
+      _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
+          _load(silent: true);
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
+<<<<<<< HEAD
     PatientSession.instance.removeListener(_onChanged);
     AppointmentStore.instance.removeListener(_onChanged);
     super.dispose();
@@ -65,16 +81,31 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
   }
 
   Future<void> _load() async {
+=======
+    _syncTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (_fetching || !mounted) return;
+    _fetching = true;
+>>>>>>> 287bb2e (Fix bugs and update code)
     setState(() {
-      _loading = true;
-      _error = null;
+      if (!silent) _loading = true;
+      if (!silent) _error = null;
     });
     try {
       final value = await widget.repository.getMyAppointments();
-      if (mounted) setState(() => _items = value);
+      if (mounted) {
+        setState(() {
+          _items = value;
+          _error = null;
+        });
+      }
     } catch (error) {
-      if (mounted) setState(() => _error = error);
+      if (mounted && !silent) setState(() => _error = error);
     } finally {
+      _fetching = false;
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -188,6 +219,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   late Appointment _appointment = widget.appointment;
   bool _cancelling = false;
   Invoice? _invoice;
+<<<<<<< HEAD
   List<Invoice> _stageInvoices = const [];
   Invoice? _bookingInvoice;
   Invoice? _labInvoice;
@@ -219,14 +251,60 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
     }
     return _invoice?.isPaid == true || _isBookingPaid;
   }
+=======
+  bool get _isInvoicePaid =>
+      _invoice?.isPaid == true ||
+      _appointment.journey?.paymentSimulated == true;
+  bool get _sharedVisit =>
+      AwsConfig.useShared && widget.repository is RemoteAppointmentRepository;
+  Timer? _syncTimer;
+  bool _refreshing = false;
+>>>>>>> 287bb2e (Fix bugs and update code)
 
   @override
   void initState() {
     super.initState();
     _loadInvoice();
+    if (widget.repository is RemoteAppointmentRepository) {
+      _refreshAppointment();
+      _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
+          _refreshAppointment();
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshAppointment() async {
+    if (_refreshing || _cancelling || !mounted) return;
+    _refreshing = true;
+    try {
+      final updated = await widget.repository.getAppointmentById(
+        _appointment.id,
+      );
+      if (updated != null && mounted && !_cancelling) {
+        if (updated.updatedAt != null &&
+            _appointment.updatedAt != null &&
+            updated.updatedAt!.isBefore(_appointment.updatedAt!)) {
+          return;
+        }
+        setState(() => _appointment = updated);
+      }
+    } catch (_) {
+      /* Keep the last known record; manual reload remains available. */
+    } finally {
+      _refreshing = false;
+    }
   }
 
   Future<void> _loadInvoice() async {
+    if (_sharedVisit) return;
     try {
       if (widget.repository is LocalAppointmentRepository ||
           widget.repository is RemoteAppointmentRepository) {
@@ -294,6 +372,18 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
 
   Future<void> _openStagePayment(Invoice invoice) async {
     final nav = Navigator.of(context);
+    if (_sharedVisit) {
+      await nav.push(
+        MaterialPageRoute(
+          builder: (_) => DigitalBoardingPassScreen(
+            appointment: _appointment,
+            repository: widget.repository,
+          ),
+        ),
+      );
+      await _refreshAppointment();
+      return;
+    }
     final paymentRepo = LocalPaymentRepository();
     if (!mounted) return;
     if (invoice.isPaid) {
@@ -363,7 +453,16 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Chi tiết lịch khám')),
+    appBar: AppBar(
+      title: const Text('Chi tiết lịch khám'),
+      actions: [
+        IconButton(
+          onPressed: _refreshAppointment,
+          icon: const Icon(Icons.refresh),
+          tooltip: 'Cập nhật lịch khám',
+        ),
+      ],
+    ),
     body: ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -615,7 +714,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                 if (_appointment.prescription != null &&
                     _appointment.prescription!.isNotEmpty) ...[
                   const Divider(height: 20),
-                  if (_isInvoicePaid) ...[
+                  if (_isInvoicePaid || _appointment.journey != null) ...[
                     const Text(
                       'Đơn thuốc & Hướng dẫn sử dụng:',
                       style: TextStyle(
@@ -1100,7 +1199,8 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
           ],
         ],
         if (_appointment.status != AppointmentStatus.cancelled &&
-            _appointment.status != AppointmentStatus.completed) ...[
+            (_appointment.status != AppointmentStatus.completed ||
+                _appointment.journey != null)) ...[
           const SizedBox(height: 12),
           FilledButton.icon(
             style: FilledButton.styleFrom(
@@ -1121,7 +1221,11 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                   ),
                 ),
               );
+<<<<<<< HEAD
               await _loadInvoice();
+=======
+              await _refreshAppointment();
+>>>>>>> 287bb2e (Fix bugs and update code)
             },
           ),
         ],
@@ -1135,7 +1239,9 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
             _isInvoicePaid ? Icons.verified_rounded : Icons.payments_rounded,
           ),
           label: Text(
-            _isInvoicePaid
+            _sharedVisit
+                ? 'Lộ trình và thanh toán mô phỏng'
+                : _isInvoicePaid
                 ? 'Xem Hóa đơn Điện tử (Đã thanh toán)'
                 : 'Thanh toán viện phí & Hóa đơn VietQR',
           ),

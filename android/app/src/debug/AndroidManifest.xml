@@ -4,4 +4,6 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Only the debug build accepts HTTP for LAN / adb demo backends. -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>

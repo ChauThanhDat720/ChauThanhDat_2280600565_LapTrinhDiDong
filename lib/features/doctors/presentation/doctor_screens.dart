@@ -444,7 +444,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
           reason: _reason.text.trim(),
           patientId: currentMember?.id ?? '',
           patientName: patientName,
-          status: AppointmentStatus.confirmed,
+          status: AppointmentStatus.pending,
           isFollowUp: widget.isFollowUp,
           parentAppointmentId: widget.parentAppointmentId,
         ),

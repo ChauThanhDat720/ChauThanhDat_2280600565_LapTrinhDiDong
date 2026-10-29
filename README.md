@@ -1,8 +1,9 @@
 # Smart Hospital
 
-Ứng dụng Flutter quản lý bệnh viện với hai chế độ:
+Ứng dụng Flutter quản lý bệnh viện với ba chế độ:
 
 - **Local** (mặc định): dữ liệu demo và các chức năng trên thiết bị.
+- **Shared**: điện thoại bệnh nhân và web bác sĩ dùng chung API + SQLite; đặt lịch, check-in, lộ trình bốn bước và đơn thuốc. Chạy demo không cần VPS: [hướng dẫn](docs/SHARED_DEMO.md).
 - **AWS**: Cognito + API Gateway REST + Lambda Node.js 24 + DynamoDB + S3 private.
 
 Source đã có API; cấu hình AWS được chuẩn bị tại `backend/template.yaml` và
