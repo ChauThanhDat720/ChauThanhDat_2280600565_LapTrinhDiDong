@@ -17,9 +17,7 @@ const PORT = process.env.PORT || 3000;
 
 const sseClients = new Set();
 export const broadcastRealtimeEvent = (category, payload) => {
-  const message = 'data: ' + JSON.stringify({ category, payload, timestamp: new Date().toISOString() }) + '
-
-';
+  const message = 'data: ' + JSON.stringify({ category, payload, timestamp: new Date().toISOString() }) + '\n\n';
   for (const client of sseClients) {
     try { client.write(message); } catch (_) { sseClients.delete(client); }
   }
@@ -87,9 +85,7 @@ const server = http.createServer(async (req, res) => {
         'Connection': 'keep-alive',
         'Access-Control-Allow-Origin': '*',
       });
-      res.write('data: ' + JSON.stringify({ category: 'connected', timestamp: new Date().toISOString() }) + '
-
-');
+      res.write('data: ' + JSON.stringify({ category: 'connected', timestamp: new Date().toISOString() }) + '\n\n');
       sseClients.add(res);
       req.on('close', () => sseClients.delete(res));
       return;
