@@ -163,6 +163,40 @@ const server = http.createServer(async (req, res) => {
             });
           } catch (_) {}
         }
+        if (checkinMatch && result && (result.statusCode === 200 || result.statusCode === 201)) {
+          try {
+            const updated = JSON.parse(result.body);
+            broadcastRealtimeEvent('queue', {
+              type: 'patientCheckin',
+              appointmentId: updated.id,
+              doctorId: updated.doctorId,
+              doctorName: updated.doctorName,
+              patientName: updated.patientName,
+              queueNumber: updated.queueNumber || 1,
+              roomNumber: updated.roomNumber || 'Phòng 204',
+              status: 'checkedIn',
+              timestamp: new Date().toISOString(),
+            });
+          } catch (_) {}
+        }
+        if (statusMatch && result && (result.statusCode === 200 || result.statusCode === 201)) {
+          try {
+            const updated = JSON.parse(result.body);
+            const isCalled = updated.status === 'inProgress' || updated.status === 'IN_PROGRESS';
+            broadcastRealtimeEvent('queue', {
+              type: isCalled ? 'queueCalled' : 'statusUpdated',
+              appointmentId: updated.id,
+              doctorId: updated.doctorId,
+              doctorName: updated.doctorName,
+              patientName: updated.patientName,
+              queueNumber: updated.queueNumber || 1,
+              roomNumber: updated.roomNumber || 'Phòng 204',
+              status: updated.status,
+              note: updated.statusNote || updated.note,
+              timestamp: new Date().toISOString(),
+            });
+          } catch (_) {}
+        }
       }
     } else if (pathname === '/invoices' || pathname.startsWith('/invoices/')) {
       const match = pathname.match(/^\/invoices\/([^/]+)$/);
@@ -172,6 +206,23 @@ const server = http.createServer(async (req, res) => {
       result = await paymentsHandler(event);
     } else if (pathname.startsWith('/payments/')) {
       result = await paymentsHandler(event);
+      if ((pathname === '/payments/webhook' || pathname === '/payments/simulate') && result && result.statusCode === 200) {
+        try {
+          const body = JSON.parse(result.body);
+          const inv = body.invoice || body;
+          if (inv && inv.id) {
+            broadcastRealtimeEvent('payment', {
+              invoiceId: inv.id,
+              appointmentId: inv.appointmentId,
+              invoiceCode: inv.code || inv.invoiceCode || inv.paymentRef,
+              amount: inv.amount,
+              bankTransactionId: body.transactionId || ('MB-' + Date.now()),
+              paymentStatus: 'paid',
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch (_) {}
+      }
     } else if (pathname === '/family/members' || pathname.startsWith('/family/members/')) {
       const defaultMatch = pathname.match(/^\/family\/members\/([^/]+)\/default$/);
       const idMatch = pathname.match(/^\/family\/members\/([^/]+)$/);
@@ -263,6 +314,17 @@ const server = http.createServer(async (req, res) => {
         event.pathParameters = { id: sessionMatch[1] };
       }
       result = await teleconsultationsHandler(event);
+      if (msgMatch && method === 'POST' && result && (result.statusCode === 200 || result.statusCode === 201)) {
+        try {
+          const sentMsg = JSON.parse(result.body);
+          broadcastRealtimeEvent('chat', {
+            sessionId: msgMatch[1],
+            appointmentId: sentMsg.appointmentId || '',
+            message: sentMsg,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (_) {}
+      }
     } else if (pathname === '/vaccinations' || pathname.startsWith('/vaccinations/')) {
       const protocolsMatch = pathname.match(/^\/vaccinations\/protocols$/);
       const upcomingMatch = pathname.match(/^\/vaccinations\/upcoming$/);

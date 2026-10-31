@@ -1,5 +1,6 @@
 import 'dart:async';
 import '../../../core/realtime/hospital_realtime_service.dart';
+import '../../../core/realtime/realtime_events.dart';
 import '../../../core/config/aws_config.dart';
 import '../../../core/repositories/application_backend.dart';
 import '../../../core/session/patient_session.dart';
@@ -54,6 +55,9 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
     PatientSession.instance.addListener(_onChanged);
     AppointmentStore.instance.addListener(_onChanged);
     _load();
+    _queueSub = HospitalRealtimeService.instance.queueStream.listen((_) {
+      if (mounted) _load(silent: true);
+    });
     if (widget.repository is RemoteAppointmentRepository) {
       _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
         if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
@@ -66,6 +70,7 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
   @override
   void dispose() {
     _syncTimer?.cancel();
+    _queueSub?.cancel();
     PatientSession.instance.removeListener(_onChanged);
     AppointmentStore.instance.removeListener(_onChanged);
     super.dispose();
@@ -242,12 +247,19 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   bool get _sharedVisit =>
       AwsConfig.useShared && widget.repository is RemoteAppointmentRepository;
   Timer? _syncTimer;
+  StreamSubscription? _queueSub;
   bool _refreshing = false;
 
   @override
   void initState() {
     super.initState();
     _loadInvoice();
+    _queueSub = HospitalRealtimeService.instance.queueStream.listen((event) {
+      if (mounted && (event.appointmentId == _appointment.id || event.type == RealtimeEventType.queueCalled)) {
+        _refreshAppointment();
+        _loadInvoice();
+      }
+    });
     if (widget.repository is RemoteAppointmentRepository) {
       _refreshAppointment();
       _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
@@ -261,6 +273,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   @override
   void dispose() {
     _syncTimer?.cancel();
+    _queueSub?.cancel();
     super.dispose();
   }
 

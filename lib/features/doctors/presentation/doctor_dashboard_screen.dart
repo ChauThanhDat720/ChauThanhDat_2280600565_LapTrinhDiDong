@@ -103,6 +103,9 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   @override
   void dispose() {
     _syncTimer?.cancel();
+    _queueRealtimeSub?.cancel();
+    AppointmentStore.instance.removeListener(_onStoreChanged);
+    AppointmentStore.instance.removeListener(_loadData);
     super.dispose();
   }
 

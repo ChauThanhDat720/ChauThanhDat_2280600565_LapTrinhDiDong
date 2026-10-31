@@ -92,6 +92,7 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
             });
           }
         }
+        if (mounted) _refresh();
       }
       _calculateQueuePosition();
     });
