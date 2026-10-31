@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -32,6 +33,11 @@ Appointment appointment({
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   test('Four steps do not claim lab results or medicine receipt from completed status alone', () {
     final prescribed = appointment(
       status: AppointmentStatus.completed,

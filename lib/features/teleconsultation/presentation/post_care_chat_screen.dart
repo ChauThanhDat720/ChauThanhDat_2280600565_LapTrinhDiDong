@@ -90,7 +90,7 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
             setState(() {
               _session = _session!.copyWith(
                 messages: nextMessages,
-                lastActivityAt: event.message.sentAt,
+                lastMessageAt: event.message.createdAt,
               );
             });
             _scrollToBottom();
@@ -220,7 +220,7 @@ class _PostCareChatScreenState extends State<PostCareChatScreen> {
     setState(() => _sending = true);
     final session = _session!;
     try {
-      await widget.repository.sendMessage(
+      final sent = await widget.repository.sendMessage(
         session.id,
         senderType: widget.isDoctorView
             ? MessageSenderType.doctor

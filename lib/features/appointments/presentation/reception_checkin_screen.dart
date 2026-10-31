@@ -32,6 +32,7 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
   List<Appointment> _appointments = [];
   bool _loading = true;
   bool _processing = false;
+  StreamSubscription? _queueSub;
 
   @override
   void initState() {
@@ -46,6 +47,7 @@ class _ReceptionCheckinScreenState extends State<ReceptionCheckinScreen>
 
   @override
   void dispose() {
+    _queueSub?.cancel();
     _tabController.dispose();
     _codeController.dispose();
     super.dispose();

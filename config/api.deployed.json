@@ -1,0 +1,5 @@
+{
+  "BACKEND_MODE": "shared",
+  "API_BASE_URL": "https://smart-hospital-api.onrender.com",
+  "ALLOW_INSECURE_HTTP": "false"
+}

@@ -45,7 +45,61 @@ class _HealthVitalsScreenState extends State<HealthVitalsScreen> with SingleTick
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.9, end: 1.15).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
     _loadVitals();
+  }
+
+  @override
+  void dispose() {
+    _liveTelemetryTimer?.cancel();
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  void _toggleLiveMonitoring() {
+    setState(() {
+      _isLiveMonitoring = !_isLiveMonitoring;
+      if (_isLiveMonitoring) {
+        _liveTelemetryTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+          if (!mounted) return;
+          setState(() {
+            _liveHeartRate = 72 + (_liveAlertActive ? 45 : (DateTime.now().second % 10 - 5));
+            _liveSystolic = 118 + (_liveAlertActive ? 35 : (DateTime.now().second % 8 - 4));
+            _liveDiastolic = 78 + (_liveAlertActive ? 15 : (DateTime.now().second % 6 - 3));
+            _liveSpo2 = _liveAlertActive ? 92 : 98;
+          });
+        });
+      } else {
+        _liveTelemetryTimer?.cancel();
+        _liveAlertActive = false;
+        _liveAlertMsg = null;
+      }
+    });
+  }
+
+  void _triggerSimulatedAlert() {
+    setState(() {
+      _liveAlertActive = !_liveAlertActive;
+      if (_liveAlertActive) {
+        _liveAlertMsg = 'Cảnh báo: Nhịp tim tăng cao bất thường (117 BPM) & Huyết áp 153/93 mmHg!';
+        _liveHeartRate = 117;
+        _liveSystolic = 153;
+        _liveDiastolic = 93;
+        _liveSpo2 = 93;
+      } else {
+        _liveAlertMsg = null;
+        _liveHeartRate = 76;
+        _liveSystolic = 120;
+        _liveDiastolic = 80;
+        _liveSpo2 = 98;
+      }
+    });
   }
 
   Future<void> _loadVitals() async {

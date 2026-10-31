@@ -52,11 +52,12 @@ void main() {
 
       final msg = TeleconsultationMessage(
         id: 'msg-test-1',
+        sessionId: 'sess-1',
         senderType: MessageSenderType.doctor,
         senderId: 'dr-linh',
         senderName: 'BS. Trần Thảo Linh',
         message: 'Bạn uống thuốc đều đặn nhé!',
-        sentAt: DateTime.now(),
+        createdAt: DateTime.now(),
       );
 
       service.notifyChatMessage(

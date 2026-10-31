@@ -61,6 +61,67 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
   int _index = 0;
 
 
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = [
+      _HomeTab(
+        repository: widget.appointmentRepository,
+        onViewAllAppointments: () => setState(() => _index = 1),
+      ),
+      AppointmentListScreen(
+        showAppBar: false,
+        repository: widget.appointmentRepository,
+      ),
+      const ToolsScreen(),
+      ProfileScreen(repository: ApplicationBackend.repositories.patients),
+    ];
+    return Scaffold(
+      body: SafeArea(child: pages[_index]),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: (value) => setState(() => _index = value),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Trang chủ',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.calendar_month_outlined),
+            selectedIcon: Icon(Icons.calendar_month),
+            label: 'Lịch khám',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.grid_view_rounded),
+            selectedIcon: Icon(Icons.grid_view_rounded),
+            label: 'Công cụ',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Cá nhân',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeTab extends StatefulWidget {
+  const _HomeTab({
+    required this.repository,
+    required this.onViewAllAppointments,
+  });
+
+  final AppointmentRepository repository;
+  final VoidCallback onViewAllAppointments;
+
+  @override
+  State<_HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<_HomeTab> {
   Widget _buildSmartAiSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -224,66 +285,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final pages = [
-      _HomeTab(
-        repository: widget.appointmentRepository,
-        onViewAllAppointments: () => setState(() => _index = 1),
-      ),
-      AppointmentListScreen(
-        showAppBar: false,
-        repository: widget.appointmentRepository,
-      ),
-      const ToolsScreen(),
-      ProfileScreen(repository: ApplicationBackend.repositories.patients),
-    ];
-    return Scaffold(
-      body: SafeArea(child: pages[_index]),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Trang chủ',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.calendar_month_outlined),
-            selectedIcon: Icon(Icons.calendar_month),
-            label: 'Lịch khám',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.grid_view_rounded),
-            selectedIcon: Icon(Icons.grid_view_rounded),
-            label: 'Công cụ',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Cá nhân',
-          ),
-        ],
-      ),
-    );
-  }
-}
 
-class _HomeTab extends StatefulWidget {
-  const _HomeTab({
-    required this.repository,
-    required this.onViewAllAppointments,
-  });
-
-  final AppointmentRepository repository;
-  final VoidCallback onViewAllAppointments;
-
-  @override
-  State<_HomeTab> createState() => _HomeTabState();
-}
-
-class _HomeTabState extends State<_HomeTab> {
   Appointment? _upcomingAppointment;
   Appointment? _pendingFollowUp;
   Appointment? _latestCompletedAppointment;
@@ -1620,6 +1622,8 @@ class _Action extends StatelessWidget {
       ),
     ),
   );
+}
+
 class _SmartFeatureCard extends StatelessWidget {
   const _SmartFeatureCard({
     required this.title,

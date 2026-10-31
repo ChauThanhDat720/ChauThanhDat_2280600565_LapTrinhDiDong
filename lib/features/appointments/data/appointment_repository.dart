@@ -288,7 +288,7 @@ class LocalAppointmentRepository implements AppointmentRepository {
   });
 
   @override
-<<<<<<< HEAD
+  @override
   Future<Appointment> checkinAppointment(String id, {String? roomNumber}) =>
       _enqueue(() async {
         final index = AppointmentStore.instance.appointments.indexWhere(
@@ -299,11 +299,26 @@ class LocalAppointmentRepository implements AppointmentRepository {
         }
         final current = AppointmentStore.instance.appointments[index];
         if (current.status == AppointmentStatus.checkedIn) return current;
+        if (current.status != AppointmentStatus.confirmed) {
+          throw StateError('Chỉ lịch đã được bác sĩ xác nhận mới được check-in.');
+        }
 
         final doctorAppts = AppointmentStore.instance.appointments
-            .where((a) => a.doctorId == current.doctorId && a.queueNumber != null)
+            .where(
+              (a) =>
+                  a.doctorId == current.doctorId &&
+                  a.queueNumber != null &&
+                  a.date.year == current.date.year &&
+                  a.date.month == current.date.month &&
+                  a.date.day == current.date.day,
+            )
             .toList();
-        final nextQueue = doctorAppts.length + 1;
+        final nextQueue =
+            doctorAppts.fold<int>(
+              0,
+              (max, a) => a.queueNumber! > max ? a.queueNumber! : max,
+            ) +
+            1;
         final updated = current.copyWith(
           status: AppointmentStatus.checkedIn,
           queueNumber: nextQueue,
@@ -320,57 +335,6 @@ class LocalAppointmentRepository implements AppointmentRepository {
         AppointmentStore.instance.replaceAppointment(updated);
         return updated;
       });
-=======
-  Future<Appointment> checkinAppointment(String id, {String? roomNumber}) {
-    final operation = _serial.then((_) async {
-      final index = AppointmentStore.instance.appointments.indexWhere(
-        (a) => a.id == id,
-      );
-      if (index < 0) {
-        throw StateError('Không tìm thấy lịch khám.');
-      }
-      final current = AppointmentStore.instance.appointments[index];
-      if (current.status == AppointmentStatus.checkedIn) return current;
-      if (current.status != AppointmentStatus.confirmed) {
-        throw StateError('Chỉ lịch đã được bác sĩ xác nhận mới được check-in.');
-      }
-
-      final doctorAppts = AppointmentStore.instance.appointments
-          .where(
-            (a) =>
-                a.doctorId == current.doctorId &&
-                a.queueNumber != null &&
-                a.date.year == current.date.year &&
-                a.date.month == current.date.month &&
-                a.date.day == current.date.day,
-          )
-          .toList();
-      final nextQueue =
-          doctorAppts.fold<int>(
-            0,
-            (max, a) => a.queueNumber! > max ? a.queueNumber! : max,
-          ) +
-          1;
-      final updated = current.copyWith(
-        status: AppointmentStatus.checkedIn,
-        queueNumber: nextQueue,
-        checkedInAt: DateTime.now(),
-        roomNumber:
-            roomNumber ??
-            current.roomNumber ??
-            HospitalNavigationResolver.getDoctorClinicRoom(
-              current.doctorId,
-              department: current.department,
-            ),
-        updatedAt: DateTime.now(),
-      );
-      AppointmentStore.instance.replaceAppointment(updated);
-      return updated;
-    });
-    _serial = operation.then<void>((_) {}, onError: (_, _) {});
-    return operation;
-  }
->>>>>>> 287bb2e (Fix bugs and update code)
 
   bool _doctorExists(String id) => doctors.any((doctor) => doctor.id == id);
 }
@@ -445,6 +409,9 @@ class RemoteAppointmentRepository
         query: {'patientId': PatientSession.instance.patientId},
       ),
     );
+    if (!PatientSession.instance.isViewingFamilyMember) {
+      return list;
+    }
     return list
         .where((item) => PatientSession.instance.matchesPatientId(item.patientId))
         .toList();

@@ -1,11 +1,6 @@
-<<<<<<< HEAD
+import 'dart:async';
 import '../../../core/realtime/realtime_events.dart';
-import 'dart:async';
 import '../../../core/realtime/hospital_realtime_service.dart';
-=======
-import 'dart:async';
-
->>>>>>> 287bb2e (Fix bugs and update code)
 import '../../../core/repositories/application_backend.dart';
 import '../../notifications/data/notification_store.dart';
 import '../../notifications/domain/notification_item.dart';
@@ -68,7 +63,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     super.initState();
     AppointmentStore.instance.addListener(_onStoreChanged);
     _loadData();
-<<<<<<< HEAD
     AppointmentStore.instance.addListener(_loadData);
     _queueRealtimeSub = HospitalRealtimeService.instance.queueStream.listen((event) {
       if (mounted) {
@@ -84,14 +78,13 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
         }
       }
     });
-  }
-
-  @override
-  void dispose() {
-    AppointmentStore.instance.removeListener(_onStoreChanged);
-    _queueRealtimeSub?.cancel();
-    AppointmentStore.instance.removeListener(_loadData);
-    super.dispose();
+    if (widget.repository is RemoteAppointmentRepository) {
+      _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
+          _loadData(silent: true);
+        }
+      });
+    }
   }
 
   void _onStoreChanged() {
@@ -104,14 +97,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
             if (mounted) setState(() => _appointments = items);
           })
           .catchError((_) {});
-=======
-    if (widget.repository is RemoteAppointmentRepository) {
-      _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-        if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
-          _loadData(silent: true);
-        }
-      });
->>>>>>> 287bb2e (Fix bugs and update code)
     }
   }
 
@@ -994,6 +979,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
         statusColor = Colors.blue;
         break;
       case AppointmentStatus.checkedIn:
+      case AppointmentStatus.inProgress:
         statusColor = const Color(0xFF0D9488);
         break;
       case AppointmentStatus.completed:

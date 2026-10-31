@@ -1,11 +1,6 @@
 import 'dart:async';
-<<<<<<< HEAD
 import '../../../core/realtime/hospital_realtime_service.dart';
-=======
-
 import '../../../core/config/aws_config.dart';
-
->>>>>>> 287bb2e (Fix bugs and update code)
 import '../../../core/repositories/application_backend.dart';
 import '../../../core/session/patient_session.dart';
 
@@ -70,7 +65,7 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
 
   @override
   void dispose() {
-<<<<<<< HEAD
+    _syncTimer?.cancel();
     PatientSession.instance.removeListener(_onChanged);
     AppointmentStore.instance.removeListener(_onChanged);
     super.dispose();
@@ -80,16 +75,9 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
     if (mounted) _load();
   }
 
-  Future<void> _load() async {
-=======
-    _syncTimer?.cancel();
-    super.dispose();
-  }
-
   Future<void> _load({bool silent = false}) async {
     if (_fetching || !mounted) return;
     _fetching = true;
->>>>>>> 287bb2e (Fix bugs and update code)
     setState(() {
       if (!silent) _loading = true;
       if (!silent) _error = null;
@@ -219,7 +207,6 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   late Appointment _appointment = widget.appointment;
   bool _cancelling = false;
   Invoice? _invoice;
-<<<<<<< HEAD
   List<Invoice> _stageInvoices = const [];
   Invoice? _bookingInvoice;
   Invoice? _labInvoice;
@@ -246,20 +233,16 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
         )) {
       return true;
     }
+    if (_appointment.journey?.paymentSimulated == true) return true;
     if (_hasPrescription) {
       return _isPharmacyPaid;
     }
     return _invoice?.isPaid == true || _isBookingPaid;
   }
-=======
-  bool get _isInvoicePaid =>
-      _invoice?.isPaid == true ||
-      _appointment.journey?.paymentSimulated == true;
   bool get _sharedVisit =>
       AwsConfig.useShared && widget.repository is RemoteAppointmentRepository;
   Timer? _syncTimer;
   bool _refreshing = false;
->>>>>>> 287bb2e (Fix bugs and update code)
 
   @override
   void initState() {
@@ -1221,11 +1204,8 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                   ),
                 ),
               );
-<<<<<<< HEAD
               await _loadInvoice();
-=======
               await _refreshAppointment();
->>>>>>> 287bb2e (Fix bugs and update code)
             },
           ),
         ],

@@ -8,11 +8,13 @@ enum AppointmentStatus {
   pending,
   confirmed,
   checkedIn,
+  inProgress,
   completed,
   cancelled;
 
   String get wireName => switch (this) {
     checkedIn => 'CHECKED_IN',
+    inProgress => 'IN_PROGRESS',
     _ => name.toUpperCase(),
   };
 
@@ -20,6 +22,7 @@ enum AppointmentStatus {
     pending => 'Chờ xác nhận',
     confirmed => 'Đã xác nhận',
     checkedIn => 'Đã tiếp đón (Đang chờ)',
+    inProgress => 'Đang khám',
     completed => 'Đã hoàn thành',
     cancelled => 'Đã hủy',
   };
@@ -30,10 +33,13 @@ enum AppointmentStatus {
       switch (value.toString().toUpperCase()) {
         'CONFIRMED' => confirmed,
         'CHECKED_IN' => checkedIn,
+        'IN_PROGRESS' => inProgress,
         'COMPLETED' => completed,
         'CANCELLED' => cancelled,
         _ => pending,
       };
+
+  static AppointmentStatus fromWire(String value) => fromJson(value);
 }
 
 class AppointmentSlot {

@@ -125,23 +125,23 @@ class _AiVoiceTriageScreenState extends State<AiVoiceTriageScreen>
 
   void _bookDoctor() {
     if (_result == null) return;
-    // Bác sĩ mẫu phù hợp với gợi ý
-    final doctor = Doctor(
-      id: _result!.suggestedDoctorId,
-      name: _result!.suggestedDoctorName,
-      specialty: _result!.suggestedDepartment,
-      department: _result!.suggestedDepartment,
-      rating: 4.9,
-      reviewCount: 128,
-      consultationFee: 150000,
-      bio: 'Bác sĩ chuyên khoa giàu kinh nghiệm trong chẩn đoán và điều trị.',
-      workingHours: '08:00 - 17:00 (Thứ 2 - Thứ 7)',
-      avatarUrl: '',
+    // Bác sĩ phù hợp với gợi ý
+    final doctor = doctors.firstWhere(
+      (d) => d.id == _result!.suggestedDoctorId,
+      orElse: () => Doctor(
+        id: _result!.suggestedDoctorId,
+        name: _result!.suggestedDoctorName,
+        departmentId: 'general',
+        department: _result!.suggestedDepartment,
+        specialty: _result!.suggestedDepartment,
+        experience: '10 năm kinh nghiệm',
+        color: const Color(0xFFBDE5E9),
+      ),
     );
 
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => DoctorBookingScreen(
+        builder: (_) => BookAppointmentScreen(
           doctor: doctor,
           initialReason: _textController.text.trim(),
         ),

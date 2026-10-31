@@ -1,10 +1,6 @@
 import 'dart:async';
-<<<<<<< HEAD
 import '../../../core/realtime/hospital_realtime_service.dart';
 import '../../../core/realtime/realtime_events.dart';
-=======
-
->>>>>>> 287bb2e (Fix bugs and update code)
 import '../../../core/repositories/application_backend.dart';
 
 import 'package:flutter/material.dart';
@@ -42,13 +38,15 @@ class DigitalBoardingPassScreen extends StatefulWidget {
 class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
   late Appointment _appointment;
   bool _checkingIn = false;
-<<<<<<< HEAD
   bool _bookingPaid = true;
   Invoice? _bookingInvoice;
   StreamSubscription? _queueSub;
   bool _isCalledIn = false;
   int? _currentServingNumber;
   int _waitingAhead = 0;
+  Timer? _syncTimer;
+  bool _reading = false;
+  bool _syncError = false;
 
   void _calculateQueuePosition() {
     final checkedInAll = AppointmentStore.instance.appointments
@@ -75,17 +73,11 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
       widget.requirePayment ||
       widget.repository is LocalAppointmentRepository ||
       widget.repository is RemoteAppointmentRepository;
-=======
-  Timer? _syncTimer;
-  bool _reading = false;
-  bool _syncError = false;
->>>>>>> 287bb2e (Fix bugs and update code)
 
   @override
   void initState() {
     super.initState();
     _appointment = widget.appointment;
-<<<<<<< HEAD
     if (_enforcePayment) {
       _bookingPaid = _appointment.status == AppointmentStatus.checkedIn;
       _loadBookingPaymentStatus();
@@ -105,10 +97,17 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
     });
     AppointmentStore.instance.addListener(_calculateQueuePosition);
     _calculateQueuePosition();
+    if (widget.repository is RemoteAppointmentRepository) {
+      _refresh();
+      _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) _refresh();
+      });
+    }
   }
 
   @override
   void dispose() {
+    _syncTimer?.cancel();
     _queueSub?.cancel();
     AppointmentStore.instance.removeListener(_calculateQueuePosition);
     super.dispose();
@@ -124,17 +123,10 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
       setState(() {
         _bookingInvoice = inv;
         _bookingPaid = paid;
-=======
-    if (widget.repository is RemoteAppointmentRepository) {
-      _refresh();
-      _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-        if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) _refresh();
->>>>>>> 287bb2e (Fix bugs and update code)
       });
     }
   }
 
-<<<<<<< HEAD
   Future<void> _payBookingFee() async {
     final repo = LocalPaymentRepository();
     final inv =
@@ -147,11 +139,6 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
       ),
     );
     await _loadBookingPaymentStatus();
-=======
-  @override
-  void dispose() {
-    _syncTimer?.cancel();
-    super.dispose();
   }
 
   Future<void> _refresh() async {
@@ -202,7 +189,6 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
     } finally {
       if (mounted) setState(() => _checkingIn = false);
     }
->>>>>>> 287bb2e (Fix bugs and update code)
   }
 
   Future<void> _checkIn() async {
@@ -673,76 +659,41 @@ class _DigitalBoardingPassScreenState extends State<DigitalBoardingPassScreen> {
                 const SizedBox(height: 20),
 
                 // Action simulation button
-<<<<<<< HEAD
-                if (!isCheckedIn) ...[
-                  if (!_bookingPaid) ...[
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 50),
-                        backgroundColor: const Color(0xFFD97706),
-                      ),
-                      icon: const Icon(Icons.qr_code_2_rounded),
-                      label: const Text(
-                        'Thanh toán Phí đăng ký khám (150.000 đ) để nhận QR',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      onPressed: _payBookingFee,
-=======
                 if (_appointment.status == AppointmentStatus.confirmed) ...[
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
                       minimumSize: const Size(double.infinity, 50),
                       backgroundColor: const Color(0xFF0D9488),
->>>>>>> 287bb2e (Fix bugs and update code)
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Sau khi thanh toán thành công, Mã QR Check-in sẽ được mở khóa tự động.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.mutedText,
+                    icon: _checkingIn
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.qr_code_scanner_rounded),
+                    label: Text(
+                      _checkingIn
+                          ? 'Đang tiếp đón...'
+                          : 'Mô phỏng Quét Check-in Ngay',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ] else ...[
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 50),
-                        backgroundColor: const Color(0xFF0D9488),
-                      ),
-                      icon: _checkingIn
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Icon(Icons.qr_code_scanner_rounded),
-                      label: Text(
-                        _checkingIn
-                            ? 'Đang tiếp đón...'
-                            : 'Mô phỏng Quét Check-in Ngay',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      onPressed: _checkingIn ? null : _checkIn,
+                    onPressed: _checkingIn ? null : _checkIn,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Nhấn để mô phỏng quét mã QR tại quầy tiếp đón phòng khám.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.mutedText,
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Nhấn để mô phỏng quét mã QR tại quầy tiếp đón phòng khám.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.mutedText,
-                      ),
-                    ),
-                  ],
+                  ),
                 ],
                 if (_appointment.status == AppointmentStatus.pending)
                   const Text(
