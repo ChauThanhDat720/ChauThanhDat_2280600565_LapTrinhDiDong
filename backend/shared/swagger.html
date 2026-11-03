@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Hospital API - Swagger UI Documentation</title>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
+  <link rel="icon" type="image/png" href="https://unpkg.com/swagger-ui-dist@5.11.0/favicon-32x32.png" sizes="32x32" />
+  <link rel="icon" type="image/png" href="https://unpkg.com/swagger-ui-dist@5.11.0/favicon-16x16.png" sizes="16x16" />
+  <style>
+    html {
+      box-sizing: border-box;
+      overflow: -moz-scrollbars-vertical;
+      overflow-y: scroll;
+    }
+    *, *:before, *:after {
+      box-sizing: inherit;
+    }
+    body {
+      margin: 0;
+      background: #fafafa;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    .custom-header {
+      background: linear-gradient(135deg, #087e88 0%, #0d5c63 100%);
+      color: white;
+      padding: 16px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .custom-header .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .custom-header .badge {
+      background: #e6fffa;
+      color: #087e88;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .custom-header .links a {
+      color: #e0f2f1;
+      text-decoration: none;
+      font-weight: 500;
+      margin-left: 18px;
+      padding: 6px 14px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.15);
+      transition: background 0.2s;
+    }
+    .custom-header .links a:hover {
+      background: rgba(255, 255, 255, 0.3);
+      color: #ffffff;
+    }
+    .swagger-ui .topbar {
+      display: none;
+    }
+    .swagger-ui .info {
+      margin: 24px 0;
+    }
+    .swagger-ui .btn.authorize {
+      background-color: #087e88;
+      border-color: #087e88;
+      color: #fff;
+    }
+    .swagger-ui .btn.authorize svg {
+      fill: #fff;
+    }
+  </style>
+</head>
+<body>
+  <header class="custom-header">
+    <div class="brand">
+      <span>🏥 BỆNH VIỆN THÔNG MINH SMART HOSPITAL</span>
+      <span class="badge">OpenAPI 3.0 / Swagger</span>
+    </div>
+    <div class="links">
+      <a href="/doctor" target="_blank">🩺 Màn hình Bác sĩ Demo</a>
+      <a href="/api-docs/swagger.json" target="_blank" download="swagger.json">📥 Tải swagger.json</a>
+      <a href="/health" target="_blank">⚡ Health Check</a>
+    </div>
+  </header>
+
+  <div id="swagger-ui"></div>
+
+  <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" charset="UTF-8"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js" charset="UTF-8"></script>
+  <script>
+    window.onload = function() {
+      const ui = SwaggerUIBundle({
+        url: "/api-docs/swagger.json",
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout",
+        docExpansion: "list",
+        filter: true,
+        showRequestHeaders: true,
+        defaultModelsExpandDepth: 1,
+        defaultModelExpandDepth: 1
+      });
+      window.ui = ui;
+    };
+  </script>
+</body>
+</html>
