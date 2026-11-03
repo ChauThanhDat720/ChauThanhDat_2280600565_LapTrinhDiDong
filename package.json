@@ -1,0 +1,21 @@
+{
+  "name": "smart-hospital-backend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "start": "node shared/server.js",
+    "start:shared": "node shared/server.js",
+    "start:demo": "DEMO_MODE=1 node shared/server.js",
+    "start:legacy": "node server.js",
+    "test:shared": "node --test shared/shared.test.js",
+    "test": "node --test tests/",
+    "format:check": "node -e \"['src/handlers', 'src/repositories', 'src/utils'].forEach(d => fs.readdirSync(d).filter(f => f.endsWith('.js')).forEach(f => import('./' + d + '/' + f)))\""
+  },
+  "dependencies": {
+    "sqlite3": "^6.0.1"
+  }
+}

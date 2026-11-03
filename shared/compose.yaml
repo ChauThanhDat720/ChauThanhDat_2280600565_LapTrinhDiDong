@@ -1,0 +1,30 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: shared/Dockerfile
+    restart: unless-stopped
+    environment:
+      DEMO_MODE: "1"
+    volumes:
+      - hospital-data:/app/data
+    expose:
+      - "3000"
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      HOSPITAL_DOMAIN: ${HOSPITAL_DOMAIN:?Set HOSPITAL_DOMAIN to your DNS hostname}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+volumes:
+  hospital-data:
+  caddy-data:
+  caddy-config:
