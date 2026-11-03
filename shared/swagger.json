@@ -1,0 +1,819 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Smart Hospital Management API",
+    "version": "1.0.0",
+    "description": "Tài liệu kỹ thuật API (OpenAPI / Swagger) cho Hệ sinh thái Bệnh viện Thông minh **Smart Hospital**.\n\nHệ thống hỗ trợ các luồng nghiệp vụ:\n- **Xác thực & Phân quyền:** Đăng ký, đăng nhập JWT Bearer Token (Bệnh nhân, Bác sĩ, Dược sĩ, Lễ tân).\n- **Danh mục y tế:** Tra cứu chuyên khoa, bác sĩ, khung giờ khám trực tuyến.\n- **Đặt khám & Tiếp đón QR:** Tiếp đón tại quầy, check-in tự động, cấp số thứ tự khám (STT).\n- **Lộ trình khám bệnh thời gian thực (Visit Journey):** 7 bước liên hoàn (Gọi khám -> Chỉ định cận lâm sàng -> Đọc kết quả CLS -> Kê đơn thuốc -> Viện phí -> Nhận thuốc).\n- **Viện phí & VietQR:** Thanh toán trực tuyến qua mã VietQR động đa ngân hàng, mô phỏng gạch nợ tức thì.\n- **Cấp cứu khẩn cấp SOS & Real-time SSE:** Truyền phát cảnh báo vị trí cấp cứu và cập nhật trạng thái thời gian thực.",
+    "contact": {
+      "name": "Smart Hospital Development Team",
+      "url": "https://github.com/ChauThanhDat720/ChauThanhDat_2280600565_LapTrinhDiDong"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://smart-hospital-api-eran.onrender.com",
+      "description": "Production Server (Render Cloud)"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Local Development Server"
+    }
+  ],
+  "tags": [
+    { "name": "Authentication", "description": "Xác thực tài khoản, phiên làm việc và phân quyền" },
+    { "name": "Doctors & Departments", "description": "Danh mục chuyên khoa, bác sĩ và tra cứu lịch trống" },
+    { "name": "Appointments", "description": "Quản lý đặt khám, danh sách ca khám và lịch làm việc bác sĩ" },
+    { "name": "Reception & Check-in", "description": "Tiếp đón bệnh nhân tại quầy, quét mã QR cấp STT" },
+    { "name": "Visit Journey", "description": "Quy trình khám bệnh 7 bước (Gọi khám, Chỉ định CLS, Kê đơn thuốc, Nhận thuốc)" },
+    { "name": "Clinical Intake & Feedback", "description": "Phiếu tiền sử trước khám và đánh giá bác sĩ" },
+    { "name": "Payments & VietQR", "description": "Hóa đơn viện phí, mã QR VietQR và mô phỏng thanh toán" },
+    { "name": "Emergency SOS & Real-time", "description": "Phát tín hiệu cấp cứu khẩn cấp SOS và lắng nghe SSE luồng sự kiện" },
+    { "name": "System Health", "description": "Kiểm tra tình trạng hoạt động máy chủ" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["System Health"],
+        "summary": "Kiểm tra tình trạng hoạt động máy chủ (Health Check)",
+        "responses": {
+          "200": {
+            "description": "Máy chủ hoạt động bình thường",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean", "example": true },
+                    "mode": { "type": "string", "example": "shared" },
+                    "demo": { "type": "boolean", "example": true }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Đăng ký tài khoản mới",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Đăng ký thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": { "$ref": "#/components/schemas/User" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Thông tin không hợp lệ hoặc thiếu dữ liệu" },
+          "409": { "description": "Email đã được đăng ký trên hệ thống" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Đăng nhập hệ thống (Bệnh nhân / Bác sĩ)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đăng nhập thành công, trả về access token",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoginResponse" }
+              }
+            }
+          },
+          "401": { "description": "Email hoặc mật khẩu không chính xác" },
+          "429": { "description": "Quá nhiều lần đăng nhập sai, vui lòng thử lại sau" }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Authentication"],
+        "summary": "Lấy thông tin tài khoản hiện tại",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Thông tin tài khoản",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": { "$ref": "#/components/schemas/User" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Chưa đăng nhập hoặc token không hợp lệ" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Đăng xuất tài khoản",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Đăng xuất thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "ok": { "type": "boolean", "example": true } }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/departments": {
+      "get": {
+        "tags": ["Doctors & Departments"],
+        "summary": "Lấy danh sách các chuyên khoa trong bệnh viện",
+        "responses": {
+          "200": {
+            "description": "Danh sách chuyên khoa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Department" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/doctors": {
+      "get": {
+        "tags": ["Doctors & Departments"],
+        "summary": "Lấy danh sách các bác sĩ",
+        "responses": {
+          "200": {
+            "description": "Danh sách bác sĩ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Doctor" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/doctors/{id}": {
+      "get": {
+        "tags": ["Doctors & Departments"],
+        "summary": "Lấy thông tin chi tiết của một bác sĩ",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" }, "example": "dr-linh" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chi tiết thông tin bác sĩ",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Doctor" }
+              }
+            }
+          },
+          "404": { "description": "Không tìm thấy bác sĩ" }
+        }
+      }
+    },
+    "/doctors/{id}/availability": {
+      "get": {
+        "tags": ["Doctors & Departments"],
+        "summary": "Tra cứu các khung giờ khám còn trống của bác sĩ theo ngày",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" }, "example": "dr-linh" },
+          { "name": "date", "in": "query", "required": false, "schema": { "type": "string", "format": "date" }, "example": "2026-11-06" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách các slot thời gian và trạng thái còn trống",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "doctorId": { "type": "string" },
+                    "slots": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/AppointmentSlot" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/appointments": {
+      "get": {
+        "tags": ["Appointments"],
+        "summary": "Lấy danh sách các cuộc hẹn của bệnh nhân hiện tại",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Danh sách cuộc hẹn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Appointment" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Appointments"],
+        "summary": "Đặt lịch khám mới",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "idempotency-key", "in": "header", "required": false, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateAppointmentRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Đặt lịch khám thành công",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Appointment" }
+              }
+            }
+          },
+          "400": { "description": "Khung giờ trong quá khứ hoặc thông tin không hợp lệ" },
+          "409": { "description": "Khung giờ này đã được người khác đặt trước" }
+        }
+      }
+    },
+    "/appointments/{id}": {
+      "get": {
+        "tags": ["Appointments"],
+        "summary": "Lấy thông tin chi tiết một ca khám",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" }, "example": "APT-173d78e6-1d09-4688-875b-104d8d5c8661" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chi tiết ca khám",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Appointment" }
+              }
+            }
+          },
+          "404": { "description": "Không tìm thấy ca khám" }
+        }
+      }
+    },
+    "/doctors/me/appointments": {
+      "get": {
+        "tags": ["Appointments"],
+        "summary": "Lấy danh sách ca khám theo bác sĩ phụ trách",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "date", "in": "query", "required": false, "schema": { "type": "string", "format": "date" }, "example": "2026-11-06" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách ca khám của bác sĩ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Appointment" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/appointments/{id}/checkin": {
+      "post": {
+        "tags": ["Reception & Check-in"],
+        "summary": "Tiếp đón bệnh nhân tại quầy hoặc quét mã QR Check-in",
+        "description": "Chuyển trạng thái ca khám sang checked_in, tự động tăng và cấp số thứ tự khám (STT) và phòng khám.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tiếp đón thành công, đã cấp STT khám",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Appointment" }
+              }
+            }
+          },
+          "409": { "description": "Lịch đã hủy hoặc chưa được bác sĩ xác nhận" }
+        }
+      }
+    },
+    "/appointments/{id}/journey": {
+      "post": {
+        "tags": ["Visit Journey"],
+        "summary": "Thực hiện hành động theo Lộ trình khám bệnh 7 bước",
+        "description": "Các action khả dụng:\n- `call`: Bác sĩ gọi số khám bệnh nhân vào phòng khám\n- `order_lab`: Bác sĩ chỉ định cận lâm sàng (xét nghiệm máu, X-Quang,...)\n- `report_lab`: Bệnh nhân báo đã hoàn tất thực hiện cận lâm sàng\n- `review_lab`: Bác sĩ kiểm tra kết quả cận lâm sàng\n- `prescribe`: Bác sĩ kết luận chẩn đoán, kê đơn thuốc và dặn dò\n- `simulate_payment`: Xác nhận thanh toán viện phí (thuốc + xét nghiệm)\n- `receive_medicines`: Bệnh nhân nhận thuốc tại quầy dược hoàn tất ca khám",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/JourneyActionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật lộ trình thành công",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Appointment" }
+              }
+            }
+          },
+          "400": { "description": "Hành động không hợp lệ hoặc thiếu dữ liệu" },
+          "409": { "description": "Xung đột: Chưa check-in hoặc chưa đến lượt thực hiện bước này" }
+        }
+      }
+    },
+    "/appointments/{id}/status": {
+      "patch": {
+        "tags": ["Appointments"],
+        "summary": "Cập nhật trạng thái ca khám",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string", "enum": ["confirmed", "checked_in", "in_progress", "completed", "cancelled"] },
+                  "note": { "type": "string" },
+                  "diagnosis": { "type": "string" },
+                  "prescription": { "type": "string" },
+                  "followUpDate": { "type": "string", "format": "date-time" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật trạng thái ca khám thành công",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Appointment" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/appointments/{id}/cancel": {
+      "patch": {
+        "tags": ["Appointments"],
+        "summary": "Hủy ca khám",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": { "type": "string", "example": "Bận việc đột xuất" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Hủy ca khám thành công",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Appointment" }
+              }
+            }
+          },
+          "409": { "description": "Không thể hủy lịch ở trạng thái hiện tại" }
+        }
+      }
+    },
+    "/appointments/{id}/intake": {
+      "get": {
+        "tags": ["Clinical Intake & Feedback"],
+        "summary": "Xem thông tin phiếu tiền sử trước khám (Clinical Intake)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Phiếu tiền sử trước khám",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ClinicalIntake" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Clinical Intake & Feedback"],
+        "summary": "Lưu phiếu khai báo tiền sử và triệu chứng trước khám",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ClinicalIntake" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã lưu phiếu khai báo tiền sử thành công"
+          }
+        }
+      }
+    },
+    "/appointments/{id}/rating": {
+      "post": {
+        "tags": ["Clinical Intake & Feedback"],
+        "summary": "Đánh giá chất lượng ca khám",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["rating"],
+                "properties": {
+                  "rating": { "type": "integer", "minimum": 1, "maximum": 5, "example": 5 },
+                  "reviewNote": { "type": "string", "example": "Bác sĩ tận tâm, hướng dẫn chu đáo." }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Gửi đánh giá thành công" }
+        }
+      }
+    },
+    "/appointments/{id}/invoice": {
+      "get": {
+        "tags": ["Payments & VietQR"],
+        "summary": "Lấy thông tin hóa đơn viện phí kèm mã VietQR",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hóa đơn và mã VietQR thanh toán",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Invoice" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments/simulate": {
+      "post": {
+        "tags": ["Payments & VietQR"],
+        "summary": "Mô phỏng thanh toán VietQR thành công",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "appointmentId": { "type": "string", "example": "APT-173d78e6-1d09-4688-875b-104d8d5c8661" },
+                  "invoiceId": { "type": "string", "example": "INV-APT-173d78e6-1d09-4688-875b-104d8d5c8661" },
+                  "amount": { "type": "integer", "example": 150000 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ghi nhận thanh toán thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean", "example": true },
+                    "status": { "type": "string", "example": "PAID" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/realtime/stream": {
+      "get": {
+        "tags": ["Emergency SOS & Real-time"],
+        "summary": "Lắng nghe luồng sự kiện Server-Sent Events (SSE) theo thời gian thực",
+        "description": "Luồng kết nối thời gian thực cập nhật hàng đợi, số thứ tự gọi khám, tin nhắn chat, trạng thái hóa đơn VietQR và cảnh báo cấp cứu SOS.",
+        "responses": {
+          "200": {
+            "description": "Luồng SSE text/event-stream",
+            "content": {
+              "text/event-stream": {
+                "schema": { "type": "string", "example": "data: {\"category\":\"queue\",\"payload\":{...}}\n\n" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/realtime/broadcast": {
+      "post": {
+        "tags": ["Emergency SOS & Real-time"],
+        "summary": "Phát thông điệp hoặc tín hiệu cấp cứu khẩn cấp SOS tới toàn hệ thống",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["category", "payload"],
+                "properties": {
+                  "category": { "type": "string", "enum": ["emergency_sos", "queue", "chat", "payment", "appointment_created"], "example": "emergency_sos" },
+                  "payload": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã phát tín hiệu thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean", "example": true },
+                    "activeClients": { "type": "integer", "example": 5 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Nhập JWT Bearer token nhận được sau khi đăng nhập qua endpoint /auth/login"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "usr-patient-1" },
+          "email": { "type": "string", "format": "email", "example": "patient@hospital.vn" },
+          "fullName": { "type": "string", "example": "Châu Thành Đạt" },
+          "phoneNumber": { "type": "string", "example": "0912345678" },
+          "role": { "type": "string", "enum": ["patient", "doctor", "pharmacist", "receptionist"], "example": "patient" }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["email", "password", "fullName"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "patient@hospital.vn" },
+          "password": { "type": "string", "format": "password", "example": "MatKhau@123" },
+          "fullName": { "type": "string", "example": "Châu Thành Đạt" },
+          "phoneNumber": { "type": "string", "example": "0912345678" },
+          "role": { "type": "string", "enum": ["patient", "doctor"], "default": "patient" }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "patient@hospital.vn" },
+          "password": { "type": "string", "format": "password", "example": "MatKhau@123" }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string", "example": "demo-token-patient-eyJhbGciOi..." },
+          "user": { "$ref": "#/components/schemas/User" }
+        }
+      },
+      "Department": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "cardiology" },
+          "name": { "type": "string", "example": "Khoa Tim Mạch" },
+          "icon": { "type": "string", "example": "favorite" },
+          "description": { "type": "string", "example": "Khám và điều trị các bệnh lý tim mạch, huyết áp" }
+        }
+      },
+      "Doctor": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "dr-linh" },
+          "fullName": { "type": "string", "example": "BS. Trần Thảo Linh" },
+          "specialty": { "type": "string", "example": "Khoa Tim Mạch" },
+          "departmentId": { "type": "string", "example": "cardiology" },
+          "roomNumber": { "type": "string", "example": "Phòng 204 - Tầng 2" },
+          "experience": { "type": "string", "example": "12 năm kinh nghiệm" },
+          "consultationFee": { "type": "integer", "example": 150000 }
+        }
+      },
+      "AppointmentSlot": {
+        "type": "object",
+        "properties": {
+          "startTime": { "type": "string", "format": "date-time", "example": "2026-11-06T08:00:00.000Z" },
+          "endTime": { "type": "string", "format": "date-time", "example": "2026-11-06T08:30:00.000Z" },
+          "isAvailable": { "type": "boolean", "example": true },
+          "unavailableReason": { "type": "string", "nullable": true }
+        }
+      },
+      "CreateAppointmentRequest": {
+        "type": "object",
+        "required": ["doctorId", "startTime", "reason"],
+        "properties": {
+          "doctorId": { "type": "string", "example": "dr-linh" },
+          "startTime": { "type": "string", "format": "date-time", "example": "2026-11-06T08:00:00.000Z" },
+          "reason": { "type": "string", "example": "Khám định kỳ huyết áp" },
+          "patientName": { "type": "string", "example": "Châu Thành Đạt" },
+          "patientPhone": { "type": "string", "example": "0912345678" }
+        }
+      },
+      "Appointment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "APT-173d78e6-1d09-4688-875b-104d8d5c8661" },
+          "patientId": { "type": "string", "example": "usr-patient-1" },
+          "patientName": { "type": "string", "example": "Châu Thành Đạt" },
+          "doctorId": { "type": "string", "example": "dr-linh" },
+          "doctorName": { "type": "string", "example": "BS. Trần Thảo Linh" },
+          "department": { "type": "string", "example": "Khoa Tim Mạch" },
+          "roomNumber": { "type": "string", "example": "Phòng 204 - Tầng 2" },
+          "queueNumber": { "type": "integer", "example": 1 },
+          "startTime": { "type": "string", "format": "date-time" },
+          "status": { "type": "string", "enum": ["confirmed", "checked_in", "in_progress", "completed", "cancelled"] },
+          "reason": { "type": "string", "example": "Khám định kỳ huyết áp" },
+          "diagnosis": { "type": "string", "nullable": true, "example": "Tăng huyết áp vô căn độ 1" },
+          "prescription": { "type": "string", "nullable": true, "example": "1. Paracetamol 500mg\n2. Vitamin C 500mg" },
+          "journey": { "$ref": "#/components/schemas/VisitJourney" }
+        }
+      },
+      "VisitJourney": {
+        "type": "object",
+        "properties": {
+          "stage": { "type": "string", "enum": ["waiting", "consulting", "lab_ordered", "lab_reported", "lab_completed", "prescribed", "finished"] },
+          "message": { "type": "string", "example": "Mời số 01 vào Phòng 204 gặp BS. Trần Thảo Linh" },
+          "calledAt": { "type": "string", "format": "date-time" },
+          "labOrder": { "type": "string" },
+          "labResultNote": { "type": "string" },
+          "prescribedAt": { "type": "string", "format": "date-time" },
+          "paymentSimulatedAt": { "type": "string", "format": "date-time" },
+          "medicinesReceivedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "JourneyActionRequest": {
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+          "action": { "type": "string", "enum": ["call", "order_lab", "report_lab", "review_lab", "prescribe", "simulate_payment", "receive_medicines"] },
+          "labOrder": { "type": "string", "description": "Bắt buộc khi action là order_lab" },
+          "labResultNote": { "type": "string", "description": "Bắt buộc khi action là review_lab" },
+          "diagnosis": { "type": "string", "description": "Bắt buộc khi action là prescribe" },
+          "prescription": { "type": "string", "description": "Bắt buộc khi action là prescribe" },
+          "note": { "type": "string", "description": "Dặn dò thêm khi kê đơn" }
+        }
+      },
+      "ClinicalIntake": {
+        "type": "object",
+        "properties": {
+          "chiefComplaint": { "type": "string", "example": "Đau tức ngực trái" },
+          "painLocation": { "type": "string", "example": "Ngực trái lan ra vai" },
+          "painLevel": { "type": "integer", "minimum": 1, "maximum": 10, "example": 4 },
+          "symptoms": { "type": "array", "items": { "type": "string" }, "example": ["Hồi hộp", "Khó thở khi gắng sức"] },
+          "knownAllergies": { "type": "string", "example": "Không có tiền sử dị ứng thuốc" },
+          "currentMedications": { "type": "string", "example": "Không dùng thuốc thường xuyên" }
+        }
+      },
+      "Invoice": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "INV-APT-173d78e6-1d09-4688-875b-104d8d5c8661" },
+          "appointmentId": { "type": "string", "example": "APT-173d78e6-1d09-4688-875b-104d8d5c8661" },
+          "patientName": { "type": "string", "example": "Châu Thành Đạt" },
+          "amount": { "type": "integer", "example": 150000 },
+          "status": { "type": "string", "enum": ["pending", "paid"], "example": "paid" },
+          "qrUrl": { "type": "string", "format": "uri" },
+          "accountNumber": { "type": "string", "example": "0912345678" },
+          "accountName": { "type": "string", "example": "BENH VIEN SMART HOSPITAL" },
+          "bankCode": { "type": "string", "example": "MB" }
+        }
+      }
+    }
+  }
+}

@@ -47,6 +47,8 @@ export async function createSharedServer({dbPath, demo = false, origins = []}) {
     }
   }, 25000).unref();
   const page = await readFile(new URL('./doctor.html', import.meta.url));
+  const swaggerPage = await readFile(new URL('./swagger.html', import.meta.url));
+  const swaggerJson = JSON.parse(await readFile(new URL('./swagger.json', import.meta.url), 'utf-8'));
   const server = http.createServer(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -85,6 +87,16 @@ export async function createSharedServer({dbPath, demo = false, origins = []}) {
         const category = typeof body.category === 'string' ? body.category.slice(0, 60) : 'system';
         broadcast(category, body.payload && typeof body.payload === 'object' ? body.payload : {});
         return send(200, {ok:true, activeClients:sseClients.size});
+      }
+      if (req.method === 'GET' && ['/api-docs', '/api-docs/', '/swagger', '/swagger/', '/docs'].includes(path)) {
+        res.writeHead(200, {
+          'content-type': 'text/html; charset=utf-8',
+          'Content-Security-Policy': "default-src 'self' https://unpkg.com; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://unpkg.com; connect-src *; frame-ancestors 'none'"
+        });
+        res.end(swaggerPage); return;
+      }
+      if (req.method === 'GET' && ['/api-docs/swagger.json', '/swagger.json', '/openapi.json'].includes(path)) {
+        return send(200, swaggerJson);
       }
       if (req.method === 'GET' && ['/', '/doctor', '/doctor/'].includes(path)) {
         res.writeHead(200, {'content-type':'text/html; charset=utf-8',
